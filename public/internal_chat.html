@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BenHub - Comunicação Interna</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/chat.css">
+  <style>
+    /* Estilos Adicionais para Chat Interno */
+    .module-nav {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .module-nav a {
+      flex: 1;
+      text-align: center;
+      padding: 12px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .module-nav a:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .module-nav a.active {
+      background: rgba(255, 193, 7, 0.2);
+      /* accent-gold rgba */
+      color: var(--accent-gold);
+      border-bottom: 2px solid var(--accent-gold);
+    }
+
+    .group-avatar {
+      border-radius: 12px !important;
+    }
+
+    /* Modals */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-content {
+      background: var(--bg-secondary);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+    }
+
+    .close-modal {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: white;
+    }
+
+    .btn-primary {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: 600;
+    }
+
+    .chat-footer .actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-right: 10px;
+    }
+
+    .btn-attach {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 50%;
+      transition: background 0.3s;
+    }
+
+    .btn-attach:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    .message-image {
+      max-width: 250px;
+      border-radius: 8px;
+      margin-top: 5px;
+      cursor: pointer;
+    }
+
+    .message-file {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 5px;
+      text-decoration: none;
+      color: var(--accent-gold);
+    }
+
+    .members-list {
+      margin-top: 15px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .member-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .member-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- Painel Lateral Esquerdo: Contatos -->
+    <aside class="sidebar-left glass-panel">
+      <!-- Navegação de Módulos -->
+      <nav class="module-nav">
+        <a href="sms_dispatch.html" id="tab-sms">Disparo SMS</a>
+        <a href="internal_chat.html" class="active" id="tab-internal">Equipe Interna</a>
+      </nav>
+
+      <div class="sidebar-header">
+        <div class="user-profile">
+          <div class="avatar" id="operator-avatar">O</div>
+          <div class="user-info">
+            <span class="user-name" id="operator-name">Carregando...</span>
+            <span class="status-indicator online">Online</span>
+          </div>
+          <button id="admin-btn" class="btn-icon" title="Painel Admin" style="display: none;">⚙️</button>
+          <button id="logout-btn" class="btn-icon" title="Sair">🚪</button>
+        </div>
+        <div class="search-bar" style="display: flex; gap: 8px;">
+          <input type="text" id="search-contact" placeholder="Buscar..." style="flex:1;">
+          <button id="new-group-btn" class="btn-icon" title="Novo Grupo"
+            style="background: rgba(255,255,255,0.1); border-radius: 8px;">➕</button>
+        </div>
+      </div>
+
+      <div class="contacts-list" id="contacts-list">
+        <!-- Chats e usuários carregados dinamicamente -->
+        <div class="loading-contacts">Carregando conversas...</div>
+      </div>
+    </aside>
+
+    <!-- Painel Central: Chat -->
+    <main class="chat-area glass-panel">
+      <!-- Estado Vazio -->
+      <div class="empty-state" id="empty-state">
+        <div class="logo">
+          <span class="logo-text">Comunicação Interna</span>
+          <div class="logo-dot"></div>
+        </div>
+        <p>Selecione um chat para interagir com a equipe</p>
+      </div>
+
+      <!-- Área de Chat Ativa -->
+      <div class="active-chat" id="active-chat" style="display: none;">
+        <header class="chat-header">
+          <div class="chat-contact-info">
+            <div class="avatar" id="chat-avatar">?</div>
+            <div class="contact-details">
+              <span class="contact-name" id="chat-contact-name">Chat</span>
+              <span class="contact-phone" id="chat-contact-desc"></span>
+            </div>
+          </div>
+          <button id="toggle-details-btn" class="btn-icon" title="Ver Detalhes do Grupo/Usuário">ℹ️</button>
+        </header>
+
+        <div class="chat-messages" id="chat-messages">
+          <!-- Mensagens renderizadas aqui -->
+        </div>
+
+        <footer class="chat-footer">
+          <form id="send-message-form" style="display: flex; width: 100%;">
+            <div class="actions">
+              <input type="file" id="file-input" style="display: none;"
+                accept="image/*, .pdf, .doc, .docx, .xls, .xlsx, .zip">
+              <button type="button" id="btn-attach-file" class="btn-attach" title="Anexar Arquivo">📎</button>
+            </div>
+            <input type="text" id="message-input" placeholder="Digite uma mensagem..." autocomplete="off">
+            <button type="submit" class="btn-send">
+              <svg viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+              </svg>
+            </button>
+          </form>
+        </footer>
+      </div>
+    </main>
+
+    <!-- Painel Lateral Direito: Detalhes -->
+    <aside class="sidebar-right glass-panel" id="sidebar-right">
+      <div class="details-header">
+        <h3 id="details-title">Detalhes</h3>
+        <button id="close-details-btn" class="btn-icon">✖</button>
+      </div>
+      <div class="details-body" id="details-body">
+        <!-- Renderizado dinamicamente -->
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Modals -->
+  <!-- Novo Grupo Modal -->
+  <div class="modal-overlay" id="modal-new-group">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Novo Grupo</h3>
+        <button class="close-modal" id="close-new-group">✖</button>
+      </div>
+      <form id="form-new-group">
+        <div class="form-group">
+          <label>Nome do Grupo</label>
+          <input type="text" id="group-name" required>
+        </div>
+        <div class="form-group">
+          <label>Descrição</label>
+          <textarea id="group-desc" rows="2"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Cor (Hex)</label>
+          <input type="color" id="group-color" value="#00d2ff">
+        </div>
+        <button type="submit" class="btn-primary">Criar Grupo</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Adicionar Membro Modal -->
+  <div class="modal-overlay" id="modal-add-member">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Adicionar Membro</h3>
+        <button class="close-modal" id="close-add-member">✖</button>
+      </div>
+      <form id="form-add-member">
+        <div class="form-group">
+          <label>Selecione um Usuário</label>
+          <select id="select-new-member" required>
+            <!-- Preenchido via JS -->
+          </select>
+        </div>
+        <button type="submit" class="btn-primary">Adicionar</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/internal_chat.js"></script>
+</body>
+
+</html>

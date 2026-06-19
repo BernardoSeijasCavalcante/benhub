@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: benhub_app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/db:/usr/src/app/src/db
+    environment:
+      - PORT=3000
+      - JWT_SECRET=super_secret_jwt_key_here
+      - KOLMEYA_API_URL=https://api.kolmeya.com/v1
+      - KOLMEYA_API_TOKEN=${KOLMEYA_API_TOKEN:-}
+      - KOLMEYA_WEBHOOK_URL=${KOLMEYA_WEBHOOK_URL:-}
+      - KOLMEYA_SMS_API_ID=${KOLMEYA_SMS_API_ID:-1}
+    restart: unless-stopped

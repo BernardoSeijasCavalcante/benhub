@@ -1,0 +1,20 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Projetos\\BenHub\\logs\\.a3f5e26d0a3a7aa495321fdea2e3cc5a55a68c51-audit.json",
+    "files": [
+        {
+            "date": 1781793538858,
+            "name": "C:\\Projetos\\BenHub\\logs\\combined-2026-06-18.log",
+            "hash": "d1ca535121cf211281f606878b6df9187c74d2e6fd6f8156048d49110d8439af"
+        },
+        {
+            "date": 1781877496079,
+            "name": "C:\\Projetos\\BenHub\\logs\\combined-2026-06-19.log",
+            "hash": "94e592ef17cffb7326841bb2386cf0f6105e82ff8e2035290c864570ba00e3e4"
+        }
+    ],
+    "hashType": "sha256"
+}

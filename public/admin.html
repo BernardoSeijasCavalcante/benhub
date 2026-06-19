@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BenHub - Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <div class="app-container">
+    <nav class="sidebar">
+      <div class="logo">
+        <span class="logo-text">BenHub</span>
+        <div class="logo-dot"></div>
+      </div>
+      <ul class="nav-links">
+        <li><a href="/sms_dispatch.html">Disparo SMS</a></li>
+        <li class="active"><a href="/admin.html">Gestão de Equipe</a></li>
+      </ul>
+      <div class="user-profile">
+        <div class="avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <span class="user-name" id="user-name">Carregando...</span>
+          <span class="user-role" id="user-role">Admin</span>
+        </div>
+        <button id="logout-btn" class="btn-icon" title="Sair">🚪</button>
+      </div>
+    </nav>
+
+    <main class="main-content">
+      <header class="header">
+        <h1>Gestão de Equipe</h1>
+        <button id="add-user-btn" class="btn-primary">+ Novo Operador</button>
+      </header>
+
+      <div class="table-container glass-panel">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Contato (WhatsApp)</th>
+              <th>Papel</th>
+              <th>Data de Criação</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- Usuários serão carregados aqui -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Adicionar/Editar Usuário -->
+  <div id="user-modal" class="modal">
+    <div class="modal-content glass-panel">
+      <h2 id="modal-title">Novo Operador</h2>
+      <form id="user-form">
+        <input type="hidden" id="user-id">
+        <div class="input-group">
+          <label>Nome</label>
+          <input type="text" id="form-name" required>
+        </div>
+        <div class="input-group">
+          <label>E-mail</label>
+          <input type="email" id="form-email" required>
+        </div>
+        <div class="input-group">
+          <label>Senha</label>
+          <input type="password" id="form-password" placeholder="Deixe em branco para não alterar">
+        </div>
+        <div class="input-group">
+          <label>Número de Contato (WhatsApp)</label>
+          <input type="text" id="form-contact" placeholder="Ex: 11999999999" required>
+        </div>
+        <div class="input-group">
+          <label>Papel</label>
+          <select id="form-role" required>
+            <option value="operator">Operador</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="cancel-modal">Cancelar</button>
+          <button type="submit" class="btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

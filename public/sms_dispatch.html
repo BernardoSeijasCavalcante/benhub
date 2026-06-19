@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BenHub - Disparo Único SMS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/chat.css">
+  <style>
+    .dispatch-container {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding: 24px;
+      height: 100%;
+      overflow-y: auto;
+    }
+    .dispatch-form {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .dispatch-form h2 {
+      margin-bottom: 8px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-group label {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .input-group input {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.2);
+      color: white;
+    }
+    .btn-send {
+      background: var(--primary-color);
+      color: #0f172a;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-send:hover {
+      opacity: 0.9;
+    }
+    .recent-log {
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    .log-table th, .log-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .log-table th {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-pending { background: #f59e0b; color: #000; }
+    .status-sent { background: #3b82f6; color: #fff; }
+    .status-delivered { background: #10b981; color: #fff; }
+    .status-failed { background: #ef4444; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Painel Lateral Esquerdo: Navegação -->
+    <aside class="sidebar-left glass-panel">
+      <!-- Navegação de Módulos -->
+      <nav class="module-nav" style="display: flex; background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+        <a href="sms_dispatch.html" class="active" id="tab-sms" style="flex: 1; text-align: center; padding: 12px; color: var(--primary-color); background: rgba(0, 210, 255, 0.2); border-bottom: 2px solid var(--primary-color); text-decoration: none; font-weight: 500;">Disparo SMS</a>
+        <a href="internal_chat.html" id="tab-internal" style="flex: 1; text-align: center; padding: 12px; color: var(--text-secondary); text-decoration: none; font-weight: 500;">Equipe Interna</a>
+      </nav>
+
+      <div class="sidebar-header">
+        <div class="user-profile">
+          <div class="avatar" id="operator-avatar">O</div>
+          <div class="user-info">
+            <span class="user-name" id="operator-name">Carregando...</span>
+            <span class="status-indicator online">Online</span>
+          </div>
+          <button id="admin-btn" class="btn-icon" title="Painel Admin" style="display: none;" onclick="window.location.href='admin.html'">⚙️</button>
+          <button id="logout-btn" class="btn-icon" title="Sair">🚪</button>
+        </div>
+        <div class="search-bar" style="visibility: hidden;">
+          <input type="text" placeholder="Buscar..." disabled>
+        </div>
+      </div>
+      
+      <div class="contacts-list" id="contacts-list" style="display: flex; flex-direction: column; padding: 20px; color: var(--text-secondary); text-align: center;">
+        <p style="font-size: 14px;">Utilize esta aba para enviar SMS de forma rápida aos clientes.</p>
+        <p style="font-size: 14px; margin-top: 10px;">Para falar com outros operadores, clique em <strong>Equipe Interna</strong>.</p>
+      </div>
+    </aside>
+
+    <!-- Painel Central: Formulário e Log -->
+    <main class="chat-area glass-panel" style="flex: 1; padding: 0;">
+      <div class="dispatch-container">
+        
+        <form class="dispatch-form" id="dispatch-form">
+          <h2>Disparar SMS</h2>
+          <p style="color: var(--text-secondary); font-size: 14px;">Envie uma mensagem de contato comercial rapidamente. O template é escolhido automaticamente.</p>
+          
+          <div id="alert-message" style="display: none; padding: 12px; border-radius: 8px; font-weight: 500; font-size: 14px;"></div>
+
+          <div class="input-group">
+            <label for="client-phone">Telefone do Cliente</label>
+            <input type="text" id="client-phone" placeholder="Ex: 11999999999" required autocomplete="off">
+          </div>
+          <div class="input-group">
+            <label for="client-name">Nome do Cliente</label>
+            <input type="text" id="client-name" placeholder="Ex: João da Silva" required autocomplete="off">
+          </div>
+          <button type="submit" class="btn-send" id="btn-submit">Enviar SMS</button>
+        </form>
+
+        <div class="recent-log">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3>Histórico de Disparos</h3>
+            <div id="admin-filters" style="display: none; align-items: center; gap: 10px;">
+              <label for="filter-operator" style="font-size: 14px; color: var(--text-secondary);">Filtrar por Operador:</label>
+              <select id="filter-operator" style="padding: 8px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.2); color: white;">
+                <option value="">Todos os Operadores</option>
+              </select>
+            </div>
+          </div>
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th>Telefone</th>
+                <th>Cliente</th>
+                <th>Mensagem Enviada</th>
+                <th>Status</th>
+                <th>Data/Hora</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody">
+              <tr><td colspan="5" style="text-align: center;">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/sms_dispatch.js"></script>
+</body>
+</html>
