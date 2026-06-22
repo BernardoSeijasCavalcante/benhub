@@ -37,8 +37,11 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Credenciais inválidas.' });
   }
 
+  const hierarchy = db.prepare('SELECT can_manage_system FROM hierarchies WHERE id = ?').get(user.hierarchy_id);
+  const computedRole = (hierarchy && hierarchy.can_manage_system === 1) ? 'admin' : 'operator';
+
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url },
+    { id: user.id, email: user.email, role: computedRole, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url },
     process.env.JWT_SECRET || 'super_secret_jwt_key_here',
     { expiresIn: '24h' }
   );
@@ -49,7 +52,7 @@ router.post('/login', (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      role: computedRole,
       contact_number: user.contact_number,
       photo_url: user.photo_url
     }

@@ -519,3 +519,81 @@
 {"level":"info","message":"Usuário desconectou: rFlukXd6rji0hTKrAAAR","timestamp":"2026-06-22 14:55:43"}
 {"level":"info","message":"Socket 1Du9zuekp4rO8fj6AAAT autenticado como usuário 1","timestamp":"2026-06-22 14:55:43"}
 {"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 14:56:11"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 14:57:36"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:44 +0000] \"POST /api/auth/login HTTP/1.1\" 200 392 \"http://localhost:3000/\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:44"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:45 +0000] \"GET /api/chat/recent HTTP/1.1\" 200 2 \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:45"}
+{"level":"info","message":"Um usuário conectou: d6MiiQ1TPORRZCYDAAAB","timestamp":"2026-06-22 14:57:45"}
+{"level":"info","message":"Socket d6MiiQ1TPORRZCYDAAAB autenticado como usuário 1","timestamp":"2026-06-22 14:57:45"}
+{"level":"info","message":"Usuário desconectou: d6MiiQ1TPORRZCYDAAAB","timestamp":"2026-06-22 14:57:46"}
+{"level":"info","message":"Um usuário conectou: i4lqfnY_faAmCphnAAAD","timestamp":"2026-06-22 14:57:46"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:46 +0000] \"GET /api/internal-chat/chats HTTP/1.1\" 304 - \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:46"}
+{"level":"info","message":"Socket i4lqfnY_faAmCphnAAAD autenticado como usuário 1","timestamp":"2026-06-22 14:57:46"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:47 +0000] \"GET /api/internal-chat/search/users?q=c HTTP/1.1\" 200 821 \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:48"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:51 +0000] \"GET /api/internal-chat/search/users?q=a HTTP/1.1\" 200 2675 \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:51"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:57:58 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:57:58"}
+{"level":"info","message":"Um usuário conectou: GagjOiAzl9zoEDNoAAAF","timestamp":"2026-06-22 14:57:58"}
+{"level":"info","message":"Usuário desconectou: i4lqfnY_faAmCphnAAAD","timestamp":"2026-06-22 14:57:58"}
+{"level":"info","message":"Socket GagjOiAzl9zoEDNoAAAF autenticado como usuário 1","timestamp":"2026-06-22 14:57:58"}
+{"level":"info","message":"Webhook Kolmeya Recebido:","payload":{"id":"6ff6f3b0-3177-4e5e-9832-49cea3b36e75","messages":[{"id":"bd0f8b7b-7379-4457-a025-5eb354019f15","reference":null,"status":"entregue","status_code":3}],"reference":"msg-1"},"timestamp":"2026-06-22 14:58:31"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:58:31 +0000] \"POST /api/webhooks/kolmeya HTTP/1.1\" 200 2 \"-\" \"GuzzleHttp/7\"","timestamp":"2026-06-22 14:58:31"}
+{"level":"info","message":"::1 - - [22/Jun/2026:17:58:31 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 14:58:31"}
+{"level":"info","message":"Usuário desconectou: GagjOiAzl9zoEDNoAAAF","timestamp":"2026-06-22 15:04:46"}
+{"level":"info","message":"Um usuário conectou: XnP1h8TQt23roBgMAAAH","timestamp":"2026-06-22 15:04:46"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:04:46 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:04:46"}
+{"level":"info","message":"Socket XnP1h8TQt23roBgMAAAH autenticado como usuário 1","timestamp":"2026-06-22 15:04:46"}
+{"level":"info","message":"Usuário desconectou: XnP1h8TQt23roBgMAAAH","timestamp":"2026-06-22 15:04:51"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:08:27"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:08:37"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:10:40"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:10:50 +0000] \"POST /api/auth/login HTTP/1.1\" 200 392 \"http://localhost:3000/\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:10:50"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:10:50 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:10:50"}
+{"level":"info","message":"Um usuário conectou: -qNE7ZBPZkFuPYZwAAAB","timestamp":"2026-06-22 15:10:51"}
+{"level":"info","message":"Socket -qNE7ZBPZkFuPYZwAAAB autenticado como usuário 1","timestamp":"2026-06-22 15:10:51"}
+{"level":"info","message":"Usuário desconectou: -qNE7ZBPZkFuPYZwAAAB","timestamp":"2026-06-22 15:10:52"}
+{"level":"info","message":"Um usuário conectou: voHFzRJtFsAN5DEbAAAD","timestamp":"2026-06-22 15:10:52"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:10:52 +0000] \"GET /api/internal-chat/chats HTTP/1.1\" 304 - \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:10:52"}
+{"level":"info","message":"Socket voHFzRJtFsAN5DEbAAAD autenticado como usuário 1","timestamp":"2026-06-22 15:10:52"}
+{"level":"info","message":"Usuário desconectou: voHFzRJtFsAN5DEbAAAD","timestamp":"2026-06-22 15:10:53"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:11:09 +0000] \"POST /api/auth/login HTTP/1.1\" 200 434 \"http://localhost:3000/\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:11:09"}
+{"level":"info","message":"Um usuário conectou: _UGOy-6Nig5Oew5aAAAF","timestamp":"2026-06-22 15:11:09"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:11:09 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:11:09"}
+{"level":"info","message":"Socket _UGOy-6Nig5Oew5aAAAF autenticado como usuário 22","timestamp":"2026-06-22 15:11:09"}
+{"level":"info","message":"Usuário desconectou: _UGOy-6Nig5Oew5aAAAF","timestamp":"2026-06-22 15:11:10"}
+{"level":"info","message":"Um usuário conectou: GDvSbKh5tIxaIysoAAAH","timestamp":"2026-06-22 15:11:10"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:11:10 +0000] \"GET /api/internal-chat/chats HTTP/1.1\" 304 - \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:11:10"}
+{"level":"info","message":"Socket GDvSbKh5tIxaIysoAAAH autenticado como usuário 22","timestamp":"2026-06-22 15:11:10"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:11:11 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:11:11"}
+{"level":"info","message":"Um usuário conectou: NzYdaZOFqq0CQXRKAAAJ","timestamp":"2026-06-22 15:11:11"}
+{"level":"info","message":"Usuário desconectou: GDvSbKh5tIxaIysoAAAH","timestamp":"2026-06-22 15:11:11"}
+{"level":"info","message":"Socket NzYdaZOFqq0CQXRKAAAJ autenticado como usuário 22","timestamp":"2026-06-22 15:11:11"}
+{"level":"info","message":"Usuário desconectou: NzYdaZOFqq0CQXRKAAAJ","timestamp":"2026-06-22 15:11:12"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:14:03"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:09 +0000] \"POST /api/auth/login HTTP/1.1\" 200 427 \"http://localhost:3000/\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:09"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:09 +0000] \"GET /api/admin/users HTTP/1.1\" 200 4130 \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:10"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:10 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:10"}
+{"level":"info","message":"Um usuário conectou: FKgZb7_TYpy7xQbzAAAB","timestamp":"2026-06-22 15:14:10"}
+{"level":"info","message":"Socket FKgZb7_TYpy7xQbzAAAB autenticado como usuário 1","timestamp":"2026-06-22 15:14:10"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:11 +0000] \"GET /api/admin/hierarchies HTTP/1.1\" 200 286 \"http://localhost:3000/admin.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:11"}
+{"level":"info","message":"Usuário desconectou: FKgZb7_TYpy7xQbzAAAB","timestamp":"2026-06-22 15:14:11"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:11 +0000] \"GET /api/admin/users HTTP/1.1\" 304 - \"http://localhost:3000/admin.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:11"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:16 +0000] \"GET /api/admin/users HTTP/1.1\" 304 - \"http://localhost:3000/admin.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:16"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:14:42"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:44 +0000] \"POST /api/auth/login HTTP/1.1\" 200 464 \"http://localhost:3000/\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:44"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:44 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:44"}
+{"level":"info","message":"Um usuário conectou: JmO9U-iXdbm_YD7_AAAB","timestamp":"2026-06-22 15:14:44"}
+{"level":"info","message":"Socket JmO9U-iXdbm_YD7_AAAB autenticado como usuário 4","timestamp":"2026-06-22 15:14:44"}
+{"level":"info","message":"Usuário desconectou: JmO9U-iXdbm_YD7_AAAB","timestamp":"2026-06-22 15:14:45"}
+{"level":"info","message":"Um usuário conectou: 9m8YNCgGy6IdgCOrAAAD","timestamp":"2026-06-22 15:14:45"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:45 +0000] \"GET /api/internal-chat/chats HTTP/1.1\" 304 - \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:45"}
+{"level":"info","message":"Socket 9m8YNCgGy6IdgCOrAAAD autenticado como usuário 4","timestamp":"2026-06-22 15:14:45"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:48 +0000] \"GET /api/internal-chat/search/users?q=adminis HTTP/1.1\" 200 142 \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:48"}
+{"level":"info","message":"Usuário desconectou: 9m8YNCgGy6IdgCOrAAAD","timestamp":"2026-06-22 15:14:54"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:54 +0000] \"GET /api/chat/recent HTTP/1.1\" 304 - \"http://localhost:3000/sms_dispatch.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:54"}
+{"level":"info","message":"Um usuário conectou: 7FT81uoosqwrd2bqAAAF","timestamp":"2026-06-22 15:14:54"}
+{"level":"info","message":"Socket 7FT81uoosqwrd2bqAAAF autenticado como usuário 4","timestamp":"2026-06-22 15:14:54"}
+{"level":"info","message":"Usuário desconectou: 7FT81uoosqwrd2bqAAAF","timestamp":"2026-06-22 15:14:55"}
+{"level":"info","message":"::1 - - [22/Jun/2026:18:14:55 +0000] \"GET /api/internal-chat/chats HTTP/1.1\" 304 - \"http://localhost:3000/internal_chat.html\" \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0\"","timestamp":"2026-06-22 15:14:55"}
+{"level":"info","message":"Um usuário conectou: GVwE7WELAnvVcsSPAAAH","timestamp":"2026-06-22 15:14:55"}
+{"level":"info","message":"Socket GVwE7WELAnvVcsSPAAAH autenticado como usuário 4","timestamp":"2026-06-22 15:14:55"}
+{"level":"info","message":"Usuário desconectou: GVwE7WELAnvVcsSPAAAH","timestamp":"2026-06-22 15:14:58"}
+{"level":"info","message":"Servidor rodando na porta 3000","timestamp":"2026-06-22 15:15:57"}
