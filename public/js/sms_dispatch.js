@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (s === 'pending') return 'Pendente';
     if (s === 'sent') return 'Enviado';
     if (s === 'delivered') return 'Entregue';
-    if (s === 'failed') return 'Falha';
+    if (s === 'failed') return 'Falhou';
     return s;
   }
 

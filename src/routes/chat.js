@@ -44,6 +44,20 @@ router.post('/send', async (req, res) => {
     return res.status(400).json({ error: 'Telefone e Nome do Cliente são obrigatórios.' });
   }
 
+  if (req.user.role === 'operator') {
+    const existingMessage = db.prepare(`
+      SELECT status FROM messages 
+      WHERE customer_phone = ? AND operator_id = ? 
+      ORDER BY timestamp DESC LIMIT 1
+    `).get(phone, req.user.id);
+
+    if (existingMessage) {
+      if (['sent', 'delivered', 'pending'].includes(existingMessage.status)) {
+        return res.status(403).json({ error: 'Você já possui um envio concluído ou em andamento para este número.' });
+      }
+    }
+  }
+
   // Templates
   const templates = [
     `Olá {{cliente}}! Sou o(a) {{operador}}, consultor(a) comercial da BenConsig! Venha me contatar por Whatsapp: https://wa.me/{{contato}}?text=Olá!`,
@@ -55,11 +69,18 @@ router.post('/send', async (req, res) => {
   // Escolhe template aleatório
   const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
   
+  const shortClientName = clientName ? clientName.trim().split(' ')[0] : '';
+  const shortOperatorName = operatorName ? operatorName.trim().split(' ')[0] : '';
+
   // Substitui as variáveis
   const messageContent = randomTemplate
-    .replace('{{cliente}}', clientName)
-    .replace('{{operador}}', operatorName)
+    .replace('{{cliente}}', shortClientName)
+    .replace('{{operador}}', shortOperatorName)
     .replace('{{contato}}', operatorContact);
+
+  if (messageContent.length > 160) {
+    return res.status(400).json({ error: 'A mensagem gerada excedeu o limite de 160 caracteres da operadora.' });
+  }
 
   // Garantir que o cliente existe
   const existingCustomer = db.prepare('SELECT * FROM customers WHERE phone_number = ?').get(phone);
@@ -81,6 +102,7 @@ router.post('/send', async (req, res) => {
 
     // 2. Enviar para a Kolmeya API
     const kolmeyaResponse = await kolmeyaService.sendSMS(phone, messageContent, messageId);
+    logger.info('Kolmeya Response:', kolmeyaResponse);
 
     let finalStatus = 'pending';
     let kolmeyaId = null;
@@ -103,6 +125,10 @@ router.post('/send', async (req, res) => {
         .run(kolmeyaId, finalStatus, messageId);
     }
     
+    if (finalStatus === 'failed') {
+      return res.status(400).json({ error: 'A operadora rejeitou o envio (número inválido, bloqueado ou duplicado).' });
+    }
+
     res.json({ success: true, messageId, status: finalStatus, sentContent: messageContent });
 
   } catch (error) {
