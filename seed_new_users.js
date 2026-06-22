@@ -26,23 +26,23 @@ function generatePassword(fullName) {
 }
 
 const operators = [
-  "ISABELLY ARAUJO",
-  "GABRIEL LIMA DE ARAUJO",
-  "YASMIN FERREIRA",
-  "NICOLLY BATISTA GIL COSTA",
-  "HELOISA FERREIRA BRITO",
-  "STEPHANNY MARLENE",
-  "ISRAEL FERNANDO",
-  "RENATO MARIANO",
-  "KAIO SANTANA SILVA",
-  "NICOLLAS PORTO DA SILVA",
-  "LORENA KATY RIBEIRO PAULO",
-  "ANA ELISA SILVA COUTINHO",
-  "JOYCE DOS SANTOS COSTA",
-  "YASMIM VITORIA DA COSTA XAVIER",
-  "KETHELYN HELOISE FERREIRA DE SOUZA",
-  "KAUANE VITORIA DA SILVA MONTEIRO",
-  "MARIA EDUARDA DE MELLO"
+  "Isabelly Araujo",
+  "Gabriel Lima de Araujo",
+  "Yasmin Ferreira",
+  "Nicolly Batista Gil Costa",
+  "Heloisa Ferreira Brito",
+  "Stephanny Marlene",
+  "Israel Fernando",
+  "Renato Mariano",
+  "Kaio Santana Silva",
+  "Nicollas Porto da Silva",
+  "Lorena Katy Ribeiro Paulo",
+  "Ana Elisa Silva Coutinho",
+  "Joyce dos Santos Costa",
+  "Yasmim Vitoria da Costa Xavier",
+  "Kethelyn Heloise Ferreira de Souza",
+  "Kauane Vitoria da Silva Monteiro",
+  "Maria Eduarda de Mello"
 ];
 
 const supervisors = [
@@ -59,24 +59,24 @@ console.log("Iniciando a criação de usuários...\n");
 console.log("--- CREDENCIAIS GERADAS ---");
 
 const insertUser = db.prepare(`
-  INSERT INTO users (name, email, password_hash, role, hierarchy_id, contact_number, created_at)
-  VALUES (?, ?, ?, ?, ?, '', CURRENT_TIMESTAMP)
+  INSERT INTO users (name, email, password_hash, hierarchy_id, contact_number, created_at)
+  VALUES (?, ?, ?, ?, '', CURRENT_TIMESTAMP)
 `);
 
-function createUser(name, hierarchyId, role) {
+function createUser(name, hierarchyId) {
   const email = generateEmail(name);
   const rawPassword = generatePassword(name);
   const hashedPassword = bcrypt.hashSync(rawPassword, 10);
   
   try {
-    insertUser.run(name, email, hashedPassword, role, hierarchyId);
+    insertUser.run(name, email, hashedPassword, hierarchyId);
     console.log(`Nome: ${name.padEnd(35)} | Email: ${email.padEnd(30)} | Senha: ${rawPassword}`);
   } catch (err) {
     if (err.message.includes('UNIQUE constraint failed: users.email')) {
       // Tentar com um email diferente adicionando um número
       const altEmail = email.replace('@', '1@');
       try {
-        insertUser.run(name, altEmail, hashedPassword, role, hierarchyId);
+        insertUser.run(name, altEmail, hashedPassword, hierarchyId);
         console.log(`Nome: ${name.padEnd(35)} | Email: ${altEmail.padEnd(30)} | Senha: ${rawPassword}`);
       } catch (err2) {
         console.error(`Erro ao criar ${name}:`, err2.message);
@@ -87,10 +87,22 @@ function createUser(name, hierarchyId, role) {
   }
 }
 
-// IDs das hierarquias baseados na tabela: 
-// 1 = Administrador, 2 = Operador, 3 = Supervisor
-operators.forEach(name => createUser(name, 2, 'user'));
-supervisors.forEach(name => createUser(name, 3, 'user'));
-admins.forEach(name => createUser(name, 1, 'admin'));
+// Garantir que as hierarquias existam
+const getOrCreateHierarchy = (name, level, canManage) => {
+  let h = db.prepare('SELECT id FROM hierarchies WHERE name = ?').get(name);
+  if (!h) {
+    const res = db.prepare('INSERT INTO hierarchies (name, level, allow_same_level_chat, can_manage_system) VALUES (?, ?, ?, ?)').run(name, level, 1, canManage);
+    return res.lastInsertRowid;
+  }
+  return h.id;
+};
+
+const adminId = getOrCreateHierarchy('Administrador do Sistema', 100, 1);
+const supervisorId = getOrCreateHierarchy('Supervisor', 50, 0);
+const operatorId = getOrCreateHierarchy('Operador Padrão', 10, 0);
+
+operators.forEach(name => createUser(name, operatorId));
+supervisors.forEach(name => createUser(name, supervisorId));
+admins.forEach(name => createUser(name, adminId));
 
 console.log("\nProcesso concluído com sucesso.");
