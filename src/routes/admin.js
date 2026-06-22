@@ -4,21 +4,102 @@ const bcrypt = require('bcrypt');
 const db = require('../db/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-// Todas as rotas de admin requerem autenticação e privilégios de admin
-router.use(authenticateToken, requireAdmin);
+// Todas as rotas de admin requerem autenticação e privilégios de admin (can_manage_system = 1)
+router.use(authenticateToken, (req, res, next) => {
+  if (req.user.hierarchy) {
+    const h = db.prepare('SELECT can_manage_system FROM hierarchies WHERE id = ?').get(req.user.hierarchy);
+    if (h && h.can_manage_system) {
+      return next();
+    }
+  }
+  // Fallback to old behavior just in case
+  if (req.user.role === 'admin') return next();
+  
+  res.status(403).json({ error: 'Acesso negado. Privilégios de administrador necessários.' });
+});
 
-// Listar operadores
+// ==========================================
+// HIERARQUIAS
+// ==========================================
+
+// Listar hierarquias
+router.get('/hierarchies', (req, res) => {
+  const hierarchies = db.prepare('SELECT * FROM hierarchies ORDER BY level DESC').all();
+  res.json(hierarchies);
+});
+
+// Criar hierarquia
+router.post('/hierarchies', (req, res) => {
+  const { name, level, allow_same_level_chat, can_manage_system } = req.body;
+  if (!name || level === undefined) {
+    return res.status(400).json({ error: 'Nome e level são obrigatórios.' });
+  }
+
+  try {
+    const result = db.prepare(`
+      INSERT INTO hierarchies (name, level, allow_same_level_chat, can_manage_system)
+      VALUES (?, ?, ?, ?)
+    `).run(name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0);
+    res.status(201).json({ id: result.lastInsertRowid, name, level, allow_same_level_chat, can_manage_system });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao criar hierarquia.' });
+  }
+});
+
+// Atualizar hierarquia
+router.put('/hierarchies/:id', (req, res) => {
+  const { id } = req.params;
+  const { name, level, allow_same_level_chat, can_manage_system } = req.body;
+
+  try {
+    db.prepare(`
+      UPDATE hierarchies
+      SET name = ?, level = ?, allow_same_level_chat = ?, can_manage_system = ?
+      WHERE id = ?
+    `).run(name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0, id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao atualizar hierarquia.' });
+  }
+});
+
+// Deletar hierarquia
+router.delete('/hierarchies/:id', (req, res) => {
+  const { id } = req.params;
+  
+  const inUse = db.prepare('SELECT 1 FROM users WHERE hierarchy_id = ?').get(id);
+  if (inUse) {
+    return res.status(400).json({ error: 'Não é possível deletar hierarquia em uso por usuários.' });
+  }
+
+  try {
+    db.prepare('DELETE FROM hierarchies WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao deletar hierarquia.' });
+  }
+});
+
+// ==========================================
+// USUÁRIOS
+// ==========================================
+
+// Listar usuários
 router.get('/users', (req, res) => {
-  const users = db.prepare('SELECT id, name, email, role, contact_number, created_at FROM users').all();
+  const users = db.prepare(`
+    SELECT u.id, u.name, u.email, u.hierarchy_id, h.name as hierarchy_name, u.contact_number, u.created_at 
+    FROM users u
+    LEFT JOIN hierarchies h ON u.hierarchy_id = h.id
+  `).all();
   res.json(users);
 });
 
-// Criar novo operador
+// Criar novo usuário
 router.post('/users', (req, res) => {
-  const { name, email, password, role, contactNumber } = req.body;
+  const { name, email, password, hierarchyId, contactNumber } = req.body;
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ error: 'Nome, email e senha são obrigatórios.' });
+  if (!name || !email || !password || !hierarchyId) {
+    return res.status(400).json({ error: 'Nome, email, senha e hierarchyId são obrigatórios.' });
   }
 
   const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
@@ -27,15 +108,14 @@ router.post('/users', (req, res) => {
   }
 
   const passwordHash = bcrypt.hashSync(password, 10);
-  const userRole = role === 'admin' ? 'admin' : 'operator';
 
   try {
     const result = db.prepare(`
-      INSERT INTO users (name, email, password_hash, role, contact_number)
+      INSERT INTO users (name, email, password_hash, hierarchy_id, contact_number)
       VALUES (?, ?, ?, ?, ?)
-    `).run(name, email, passwordHash, userRole, contactNumber);
+    `).run(name, email, passwordHash, hierarchyId, contactNumber);
 
-    res.status(201).json({ id: result.lastInsertRowid, name, email, role: userRole, contactNumber });
+    res.status(201).json({ id: result.lastInsertRowid, name, email, hierarchyId, contactNumber });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao criar usuário.' });
   }
@@ -44,10 +124,10 @@ router.post('/users', (req, res) => {
 // Atualizar usuário (senha ou dados)
 router.put('/users/:id', (req, res) => {
   const { id } = req.params;
-  const { name, email, password, role, contactNumber } = req.body;
+  const { name, email, password, hierarchyId, contactNumber } = req.body;
 
-  let query = 'UPDATE users SET name = ?, email = ?, role = ?, contact_number = ?';
-  const params = [name, email, role, contactNumber];
+  let query = 'UPDATE users SET name = ?, email = ?, hierarchy_id = ?, contact_number = ?';
+  const params = [name, email, hierarchyId, contactNumber];
 
   if (password) {
     const passwordHash = bcrypt.hashSync(password, 10);

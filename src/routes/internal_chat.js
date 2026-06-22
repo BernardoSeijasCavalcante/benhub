@@ -31,40 +31,50 @@ function checkGroupAdmin(req, res, next) {
   next();
 }
 
-// 1. Listar todos os chats (directs e groups) do usuário logado e os usuários disponíveis para chat direto
+// 1. Listar todos os chats (directs que foram adicionados à lista de contatos e groups)
 router.get('/chats', (req, res) => {
   const userId = req.user.id;
 
-  // Pegar todos os chats onde o usuário é membro
-  const chats = db.prepare(`
-    SELECT c.* 
+  // Pegar todos os grupos onde o usuário é membro
+  const groups = db.prepare(`
+    SELECT c.*, m.is_pinned 
     FROM internal_chats c
     JOIN internal_chat_members m ON c.id = m.chat_id
-    WHERE m.user_id = ?
+    WHERE m.user_id = ? AND c.type = 'group'
   `).all(userId);
 
-  // Para chats diretos, descobrir quem é o outro participante para exibir o nome correto
-  const processedChats = chats.map(chat => {
-    if (chat.type === 'direct') {
-      const otherMember = db.prepare(`
-        SELECT u.id, u.name 
-        FROM internal_chat_members m
-        JOIN users u ON m.user_id = u.id
-        WHERE m.chat_id = ? AND m.user_id != ?
-      `).get(chat.id, userId);
-      
-      if (otherMember) {
-        chat.name = otherMember.name;
-        chat.other_user_id = otherMember.id;
-      }
-    }
-    return chat;
+  // Pegar a lista de contatos do usuário (user_contacts)
+  const contacts = db.prepare(`
+    SELECT uc.contact_id as other_user_id, uc.is_pinned, u.name
+    FROM user_contacts uc
+    JOIN users u ON uc.contact_id = u.id
+    WHERE uc.user_id = ?
+  `).all(userId);
+
+  // Para os contatos, precisamos ver se já existe um chat_id 'direct' com eles, senão envia sem chatId por enquanto
+  // (O chat será criado ao enviar a primeira mensagem via POST /direct)
+  const processedContacts = contacts.map(contact => {
+    const existingChat = db.prepare(`
+      SELECT m1.chat_id
+      FROM internal_chat_members m1
+      JOIN internal_chat_members m2 ON m1.chat_id = m2.chat_id
+      JOIN internal_chats c ON c.id = m1.chat_id
+      WHERE c.type = 'direct' AND m1.user_id = ? AND m2.user_id = ?
+    `).get(userId, contact.other_user_id);
+
+    return {
+      id: existingChat ? existingChat.chat_id : null,
+      type: 'direct',
+      name: contact.name,
+      other_user_id: contact.other_user_id,
+      is_pinned: contact.is_pinned
+    };
   });
 
-  // Usuários para iniciar novas conversas diretas
-  const users = db.prepare('SELECT id, name FROM users WHERE id != ?').all(userId);
+  const allChats = [...groups, ...processedContacts];
 
-  res.json({ chats: processedChats, users });
+  // Vamos ordenar no frontend, mas no backend mandamos tudo em "chats"
+  res.json({ chats: allChats });
 });
 
 // 2. Criar um novo grupo
@@ -90,6 +100,15 @@ router.post('/groups', (req, res) => {
   res.json({ success: true, chatId });
 });
 
+// Sair ou remover de um chat
+router.delete('/:chatId/leave', (req, res) => {
+  const { chatId } = req.params;
+  const userId = req.user.id;
+  
+  db.prepare('DELETE FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').run(chatId, userId);
+  res.json({ success: true });
+});
+
 // 3. Atualizar atributos do grupo (apenas admin)
 router.put('/:chatId/group', checkGroupAdmin, (req, res) => {
   const { chatId } = req.params;
@@ -111,7 +130,6 @@ router.post('/:chatId/members', checkGroupAdmin, (req, res) => {
 
   if (!userId) return res.status(400).json({ error: 'ID do usuário obrigatório.' });
 
-  // Checa se o usuário já está no grupo
   const exists = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
   if (exists) return res.status(400).json({ error: 'Usuário já está no grupo.' });
 
@@ -148,7 +166,32 @@ router.post('/direct', (req, res) => {
 
   if (!targetUserId) return res.status(400).json({ error: 'targetUserId obrigatório.' });
 
-  // Checar se já existe
+  // === VALIDAÇÃO DE HIERARQUIA ===
+  const currentUser = db.prepare('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+  const targetUser = db.prepare('SELECT u.*, h.level as h_level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(targetUserId);
+
+  if (!currentUser || !targetUser) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+  let allowed = false;
+  if (currentUser.h_level > targetUser.h_level) {
+    allowed = true;
+  } else if (currentUser.h_level === targetUser.h_level) {
+    if (currentUser.allow_same_level_chat) allowed = true;
+  } else if (currentUser.h_level === targetUser.h_level - 1) { // 1 nível acima
+    allowed = true;
+  }
+
+  // Verifica se há permissão explícita (allowed_communications)
+  if (!allowed) {
+    const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUserId, targetUserId, userId);
+    if (explicitPerm) allowed = true;
+  }
+
+  if (!allowed) {
+    return res.status(403).json({ error: 'Comunicação restrita pela hierarquia. Solicite acesso.' });
+  }
+  // ===============================
+
   const existingChat = db.prepare(`
     SELECT m1.chat_id
     FROM internal_chat_members m1
@@ -161,7 +204,6 @@ router.post('/direct', (req, res) => {
     return res.json({ chatId: existingChat.chat_id });
   }
 
-  // Criar novo chat direto
   const result = db.prepare(`INSERT INTO internal_chats (type, created_by) VALUES ('direct', ?)`).run(userId);
   const chatId = result.lastInsertRowid;
 
@@ -176,7 +218,6 @@ router.get('/:chatId/messages', (req, res) => {
   const { chatId } = req.params;
   const userId = req.user.id;
 
-  // Verificar se o usuário pertence a este chat
   const isMember = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
   if (!isMember) return res.status(403).json({ error: 'Acesso negado ao chat.' });
 
@@ -188,7 +229,17 @@ router.get('/:chatId/messages', (req, res) => {
     ORDER BY m.created_at ASC
   `).all(chatId);
 
-  // Também retornar os membros do chat e informações (para gerenciar grupo)
+  // Adicionar reações para as mensagens
+  messages.forEach(msg => {
+    const reactions = db.prepare(`
+      SELECT r.id, r.user_id, r.reaction, u.name as userName
+      FROM internal_message_reactions r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.message_id = ?
+    `).all(msg.id);
+    msg.reactions = reactions;
+  });
+
   const chatInfo = db.prepare('SELECT * FROM internal_chats WHERE id = ?').get(chatId);
   const members = db.prepare(`
     SELECT u.id, u.name, m.role 
@@ -203,16 +254,18 @@ router.get('/:chatId/messages', (req, res) => {
 // 7. Enviar mensagem
 router.post('/:chatId/messages', (req, res) => {
   const { chatId } = req.params;
-  const { content_type, content, file_url } = req.body;
+  const { content_type, content, file_url, is_forwarded } = req.body;
   const userId = req.user.id;
 
   const isMember = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
   if (!isMember) return res.status(403).json({ error: 'Acesso negado ao chat.' });
 
+  const forwarded = is_forwarded ? 1 : 0;
+  
   const result = db.prepare(`
-    INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(chatId, userId, content_type || 'text', content || '', file_url || null);
+    INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url, is_forwarded)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(chatId, userId, content_type || 'text', content || '', file_url || null, forwarded);
 
   const messageId = result.lastInsertRowid;
   const newMessage = db.prepare(`
@@ -221,8 +274,8 @@ router.post('/:chatId/messages', (req, res) => {
     JOIN users u ON m.sender_id = u.id
     WHERE m.id = ?
   `).get(messageId);
+  newMessage.reactions = [];
 
-  // Emitir evento Socket.IO
   const io = req.app.get('io');
   if (io) {
     const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
@@ -244,13 +297,10 @@ router.post('/:chatId/upload', upload.single('file'), (req, res) => {
   }
 
   const isMember = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
-  if (!isMember) {
-    return res.status(403).json({ error: 'Acesso negado ao chat.' });
-  }
+  if (!isMember) return res.status(403).json({ error: 'Acesso negado ao chat.' });
 
   const fileUrl = '/uploads/' + req.file.filename;
   
-  // Determinar content_type
   let contentType = 'file';
   if (req.file.mimetype.startsWith('image/')) {
     contentType = 'image';
@@ -268,8 +318,8 @@ router.post('/:chatId/upload', upload.single('file'), (req, res) => {
     JOIN users u ON m.sender_id = u.id
     WHERE m.id = ?
   `).get(messageId);
+  newMessage.reactions = [];
 
-  // Emitir evento Socket.IO
   const io = req.app.get('io');
   if (io) {
     const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
@@ -279,6 +329,352 @@ router.post('/:chatId/upload', upload.single('file'), (req, res) => {
   }
 
   res.json({ success: true, message: newMessage });
+});
+
+// --- NOVAS ROTAS WHATSAPP ---
+
+// Pesquisa global de usuários com verificação de hierarquia
+router.get('/search/users', (req, res) => {
+  const { q } = req.query;
+  const userId = req.user.id;
+  
+  if (!q) return res.json({ users: [] });
+
+  const currentUser = db.prepare('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+
+  const users = db.prepare(`
+    SELECT u.id, u.name, h.level as h_level, h.name as hierarchy_name 
+    FROM users u
+    LEFT JOIN hierarchies h ON u.hierarchy_id = h.id
+    WHERE u.id != ? AND u.name LIKE ?
+    LIMIT 20
+  `).all(userId, `%${q}%`);
+  
+  // Mapeia adicionando flag requires_request
+  const mappedUsers = users.map(targetUser => {
+    let allowed = false;
+    let h_level = targetUser.h_level || 0;
+    let curr_level = currentUser.h_level || 0;
+
+    if (curr_level > h_level) allowed = true;
+    else if (curr_level === h_level && currentUser.allow_same_level_chat) allowed = true;
+    else if (curr_level === h_level - 1) allowed = true;
+
+    if (!allowed) {
+      const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUser.id, targetUser.id, userId);
+      if (explicitPerm) allowed = true;
+    }
+
+    return {
+      id: targetUser.id,
+      name: targetUser.name,
+      hierarchy_name: targetUser.hierarchy_name,
+      requires_request: !allowed
+    };
+  });
+
+  res.json({ users: mappedUsers });
+});
+
+// Adicionar contato à lista pessoal
+router.post('/contacts', (req, res) => {
+  const { contactId } = req.body;
+  const userId = req.user.id;
+
+  if (!contactId || contactId === userId) return res.status(400).json({ error: 'Contato inválido.' });
+
+  const exists = db.prepare('SELECT 1 FROM user_contacts WHERE user_id = ? AND contact_id = ?').get(userId, contactId);
+  if (!exists) {
+    db.prepare('INSERT INTO user_contacts (user_id, contact_id) VALUES (?, ?)').run(userId, contactId);
+  }
+
+  res.json({ success: true });
+});
+
+// Remover contato da lista pessoal
+router.delete('/contacts/:contactId', (req, res) => {
+  const { contactId } = req.params;
+  const userId = req.user.id;
+
+  db.prepare('DELETE FROM user_contacts WHERE user_id = ? AND contact_id = ?').run(userId, contactId);
+  res.json({ success: true });
+});
+
+// Fixar/Desfixar contato (Lista pessoal)
+router.put('/contacts/:contactId/pin', (req, res) => {
+  const { contactId } = req.params;
+  const userId = req.user.id;
+  db.prepare('UPDATE user_contacts SET is_pinned = 1 WHERE user_id = ? AND contact_id = ?').run(userId, contactId);
+  res.json({ success: true });
+});
+router.put('/contacts/:contactId/unpin', (req, res) => {
+  const { contactId } = req.params;
+  const userId = req.user.id;
+  db.prepare('UPDATE user_contacts SET is_pinned = 0 WHERE user_id = ? AND contact_id = ?').run(userId, contactId);
+  res.json({ success: true });
+});
+
+// Fixar/Desfixar grupo
+router.put('/groups/:chatId/pin', (req, res) => {
+  const { chatId } = req.params;
+  const userId = req.user.id;
+  db.prepare('UPDATE internal_chat_members SET is_pinned = 1 WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  res.json({ success: true });
+});
+router.put('/groups/:chatId/unpin', (req, res) => {
+  const { chatId } = req.params;
+  const userId = req.user.id;
+  db.prepare('UPDATE internal_chat_members SET is_pinned = 0 WHERE user_id = ? AND chat_id = ?').run(userId, chatId);
+  res.json({ success: true });
+});
+
+// Fixar/Desfixar mensagem
+router.put('/:chatId/messages/:messageId/pin', (req, res) => {
+  const { chatId, messageId } = req.params;
+  const userId = req.user.id;
+  
+  const isMember = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
+  if (!isMember) return res.status(403).json({ error: 'Acesso negado.' });
+
+  db.prepare('UPDATE internal_messages SET is_pinned = 1 WHERE id = ? AND chat_id = ?').run(messageId, chatId);
+  
+  const io = req.app.get('io');
+  if (io) {
+    const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('message_pinned', { chatId, messageId });
+    });
+  }
+
+  res.json({ success: true });
+});
+router.put('/:chatId/messages/:messageId/unpin', (req, res) => {
+  const { chatId, messageId } = req.params;
+  
+  db.prepare('UPDATE internal_messages SET is_pinned = 0 WHERE id = ? AND chat_id = ?').run(messageId, chatId);
+  
+  const io = req.app.get('io');
+  if (io) {
+    const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('message_unpinned', { chatId, messageId });
+    });
+  }
+
+  res.json({ success: true });
+});
+
+// Reações
+router.post('/:chatId/messages/:messageId/reactions', (req, res) => {
+  const { chatId, messageId } = req.params;
+  const { reaction } = req.body;
+  const userId = req.user.id;
+
+  const exists = db.prepare('SELECT 1 FROM internal_message_reactions WHERE message_id = ? AND user_id = ? AND reaction = ?').get(messageId, userId, reaction);
+  if (!exists) {
+    db.prepare('INSERT INTO internal_message_reactions (message_id, user_id, reaction) VALUES (?, ?, ?)').run(messageId, userId, reaction);
+  }
+
+  const io = req.app.get('io');
+  if (io) {
+    const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('reaction_added', { chatId, messageId, userId, reaction, userName: req.user.name });
+    });
+  }
+
+  res.json({ success: true });
+});
+
+router.delete('/:chatId/messages/:messageId/reactions', (req, res) => {
+  const { chatId, messageId } = req.params;
+  const { reaction } = req.body;
+  const userId = req.user.id;
+
+  db.prepare('DELETE FROM internal_message_reactions WHERE message_id = ? AND user_id = ? AND reaction = ?').run(messageId, userId, reaction);
+
+  const io = req.app.get('io');
+  if (io) {
+    const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('reaction_removed', { chatId, messageId, userId, reaction });
+    });
+  }
+
+  res.json({ success: true });
+});
+
+// Encaminhar mensagens (batch)
+router.post('/forward', (req, res) => {
+  const { originalMessageId, targetChatIds, targetUserIds } = req.body;
+  const userId = req.user.id;
+
+  const originalMsg = db.prepare('SELECT * FROM internal_messages WHERE id = ?').get(originalMessageId);
+  if (!originalMsg) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+
+  const io = req.app.get('io');
+  let successCount = 0;
+
+  // Encaminhar para chats existentes
+  if (targetChatIds && Array.isArray(targetChatIds)) {
+    targetChatIds.forEach(chatId => {
+      const isMember = db.prepare('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?').get(chatId, userId);
+      if (isMember) {
+        const result = db.prepare(`
+          INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url, is_forwarded)
+          VALUES (?, ?, ?, ?, ?, 1)
+        `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
+        
+        const newMessage = db.prepare(`
+          SELECT m.*, u.name as sender_name 
+          FROM internal_messages m
+          JOIN users u ON m.sender_id = u.id
+          WHERE m.id = ?
+        `).get(result.lastInsertRowid);
+        newMessage.reactions = [];
+
+        if (io) {
+          const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+          members.forEach(m => io.to('user_' + m.user_id).emit('receive_internal_message', newMessage));
+        }
+        successCount++;
+      }
+    });
+  }
+
+  // Encaminhar para contatos sem chat (cria o chat direto primeiro)
+  if (targetUserIds && Array.isArray(targetUserIds)) {
+    targetUserIds.forEach(targetId => {
+      const existingChat = db.prepare(`
+        SELECT m1.chat_id
+        FROM internal_chat_members m1
+        JOIN internal_chat_members m2 ON m1.chat_id = m2.chat_id
+        JOIN internal_chats c ON c.id = m1.chat_id
+        WHERE c.type = 'direct' AND m1.user_id = ? AND m2.user_id = ?
+      `).get(userId, targetId);
+
+      let chatId;
+      if (existingChat) {
+        chatId = existingChat.chat_id;
+      } else {
+        const cResult = db.prepare(`INSERT INTO internal_chats (type, created_by) VALUES ('direct', ?)`).run(userId);
+        chatId = cResult.lastInsertRowid;
+        db.prepare(`INSERT INTO internal_chat_members (chat_id, user_id) VALUES (?, ?)`).run(chatId, userId);
+        db.prepare(`INSERT INTO internal_chat_members (chat_id, user_id) VALUES (?, ?)`).run(chatId, targetId);
+      }
+
+      const result = db.prepare(`
+        INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url, is_forwarded)
+        VALUES (?, ?, ?, ?, ?, 1)
+      `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
+      
+      const newMessage = db.prepare(`
+        SELECT m.*, u.name as sender_name 
+        FROM internal_messages m
+        JOIN users u ON m.sender_id = u.id
+        WHERE m.id = ?
+      `).get(result.lastInsertRowid);
+      newMessage.reactions = [];
+
+      if (io) {
+        const members = db.prepare('SELECT user_id FROM internal_chat_members WHERE chat_id = ?').all(chatId);
+        members.forEach(m => io.to('user_' + m.user_id).emit('receive_internal_message', newMessage));
+      }
+      successCount++;
+    });
+  }
+
+  res.json({ success: true, forwardedTo: successCount });
+});
+
+// --- SOLICITAÇÕES DE COMUNICAÇÃO ---
+
+// Criar solicitação
+router.post('/requests', (req, res) => {
+  const { targetId } = req.body;
+  const userId = req.user.id;
+
+  if (!targetId || targetId === userId) return res.status(400).json({ error: 'Usuário alvo inválido.' });
+
+  // Verifica se já tem pending
+  const pending = db.prepare('SELECT 1 FROM communication_requests WHERE requester_id = ? AND target_id = ? AND status = "pending"').get(userId, targetId);
+  if (pending) return res.status(400).json({ error: 'Já existe uma solicitação pendente para este usuário.' });
+
+  // Verifica se já é permitido
+  const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetId, targetId, userId);
+  if (explicitPerm) return res.status(400).json({ error: 'Comunicação já está liberada.' });
+
+  db.prepare('INSERT INTO communication_requests (requester_id, target_id) VALUES (?, ?)').run(userId, targetId);
+
+  // Aqui você pode emitir um socket event para notificar o targetUser
+  const io = req.app.get('io');
+  if (io) io.to('user_' + targetId).emit('new_communication_request', { fromId: userId });
+
+  res.json({ success: true, message: 'Solicitação enviada.' });
+});
+
+// Listar solicitações pendentes (recebidas)
+router.get('/requests/pending', (req, res) => {
+  const userId = req.user.id;
+  const requests = db.prepare(`
+    SELECT cr.id, cr.requester_id, u.name as requester_name, cr.created_at
+    FROM communication_requests cr
+    JOIN users u ON cr.requester_id = u.id
+    WHERE cr.target_id = ? AND cr.status = 'pending'
+  `).all(userId);
+  res.json(requests);
+});
+
+// Aprovar solicitação
+router.post('/requests/:id/approve', (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const request = db.prepare('SELECT * FROM communication_requests WHERE id = ? AND target_id = ? AND status = "pending"').get(id, userId);
+  if (!request) return res.status(404).json({ error: 'Solicitação não encontrada.' });
+
+  // Atualiza status
+  db.prepare('UPDATE communication_requests SET status = "approved" WHERE id = ?').run(id);
+
+  // Insere permissão
+  db.prepare('INSERT OR IGNORE INTO allowed_communications (user_a_id, user_b_id, granted_by) VALUES (?, ?, ?)').run(request.requester_id, userId, userId);
+
+  // Notificar quem pediu
+  const io = req.app.get('io');
+  if (io) io.to('user_' + request.requester_id).emit('communication_request_approved', { targetId: userId, targetName: req.user.name });
+
+  res.json({ success: true });
+});
+
+// Rejeitar solicitação
+router.post('/requests/:id/reject', (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  const request = db.prepare('SELECT * FROM communication_requests WHERE id = ? AND target_id = ? AND status = "pending"').get(id, userId);
+  if (!request) return res.status(404).json({ error: 'Solicitação não encontrada.' });
+
+  db.prepare('UPDATE communication_requests SET status = "rejected" WHERE id = ?').run(id);
+
+  res.json({ success: true });
+});
+
+// Liberação proativa por usuário superior (Botão "Liberar Contato" sem request)
+router.post('/allow-contact', (req, res) => {
+  const { targetId } = req.body;
+  const userId = req.user.id;
+
+  const currentUser = db.prepare('SELECT h.level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+  const targetUser = db.prepare('SELECT h.level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(targetId);
+
+  // Opcional: checar se currentUser > targetUser para liberar, ou permitir que qualquer um que queira libere o acesso a si mesmo
+  if (!currentUser || !targetUser || currentUser.level < targetUser.level) {
+    return res.status(403).json({ error: 'Somente níveis superiores podem liberar contato ativamente.' });
+  }
+
+  db.prepare('INSERT OR IGNORE INTO allowed_communications (user_a_id, user_b_id, granted_by) VALUES (?, ?, ?)').run(userId, targetId, userId);
+  
+  res.json({ success: true });
 });
 
 module.exports = router;

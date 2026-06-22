@@ -32,7 +32,6 @@
 
     .module-nav a.active {
       background: rgba(255, 193, 7, 0.2);
-      /* accent-gold rgba */
       color: var(--accent-gold);
       border-bottom: 2px solid var(--accent-gold);
     }
@@ -72,6 +71,9 @@
       width: 400px;
       max-width: 90%;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .modal-header {
@@ -165,6 +167,7 @@
       margin-top: 5px;
       text-decoration: none;
       color: var(--accent-gold);
+      cursor: pointer;
     }
 
     .members-list {
@@ -186,6 +189,291 @@
       align-items: center;
       gap: 10px;
     }
+
+    /* File Viewer */
+    #file-viewer-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    #file-viewer-body img {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+      margin: 0 auto;
+      object-fit: contain;
+      background-color: var(--bg-secondary);
+    }
+    .mammoth-docx-container {
+      padding: 40px;
+      color: #333;
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    /* NOVIDADES WHATSAPP-LIKE */
+    
+    /* Search Results */
+    #search-results {
+      max-height: 150px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      margin: 8px 15px;
+      display: none;
+    }
+    #search-results .search-item {
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #search-results .search-item:hover {
+      background: rgba(255,255,255,0.05);
+    }
+    #search-results .btn-add-contact {
+      background: var(--primary-color);
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    /* Pinned Messages Bar */
+    .pinned-messages-bar {
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .pinned-message-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0,0,0,0.2);
+      padding: 8px;
+      border-radius: 6px;
+      border-left: 3px solid var(--accent-gold);
+      font-size: 13px;
+    }
+    .pinned-message-item .content-preview {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-right: 10px;
+      color: var(--text-secondary);
+    }
+    .pinned-message-item .unpin-btn {
+      background: none;
+      border: none;
+      color: var(--danger, #ff6b6b);
+      cursor: pointer;
+    }
+
+    /* Message Actions Menu */
+    .message {
+      position: relative;
+    }
+    .message-actions-trigger {
+      position: absolute;
+      top: 5px;
+      right: -25px;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .message.customer .message-actions-trigger {
+      right: auto;
+      left: -25px;
+    }
+    .message:hover .message-actions-trigger {
+      opacity: 1;
+    }
+    .message-actions-menu {
+      position: absolute;
+      top: 25px;
+      right: -25px;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 6px;
+      z-index: 10;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .message.customer .message-actions-menu {
+      right: auto;
+      left: -25px;
+    }
+    .message-actions-menu button {
+      background: none;
+      border: none;
+      color: white;
+      padding: 8px 12px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .message-actions-menu button:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    
+    /* Forwarded label */
+    .forwarded-label {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Reactions */
+    .reactions-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .reaction-badge {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 2px 6px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .reaction-badge:hover {
+      background: rgba(255,255,255,0.1);
+    }
+    .reaction-picker {
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 5px;
+      display: none;
+      gap: 5px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      z-index: 11;
+    }
+    .message.customer .reaction-picker {
+      right: auto;
+      left: 0;
+    }
+    .reaction-picker button {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .reaction-picker button:hover {
+      background: rgba(255,255,255,0.1);
+      transform: scale(1.2);
+    }
+
+    /* Drag & Drop Overlay */
+    .drag-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+      border: 2px dashed var(--accent-gold);
+      border-radius: inherit;
+    }
+    .drag-overlay.active {
+      display: flex;
+    }
+    .drag-overlay-content {
+      text-align: center;
+      color: var(--accent-gold);
+      font-size: 24px;
+      pointer-events: none;
+    }
+
+    /* Contact Item Context Menu / Buttons */
+    .contact-item {
+      position: relative;
+    }
+    .contact-actions {
+      display: none;
+      gap: 5px;
+    }
+    .contact-item:hover .contact-actions {
+      display: flex;
+    }
+    .contact-actions button {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .contact-actions button:hover {
+      color: white;
+    }
+    
+    /* Pinned Icon in contact */
+    .pin-icon {
+      font-size: 12px;
+      margin-left: auto;
+      margin-right: 5px;
+    }
+
+    /* Forward Modal Selection List */
+    .forward-list {
+      flex: 1;
+      overflow-y: auto;
+      margin: 15px 0;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+    }
+    .forward-item {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+    }
+    .forward-item:hover {
+      background: rgba(255,255,255,0.05);
+    }
+    .forward-item input[type="checkbox"] {
+      margin-right: 15px;
+      transform: scale(1.2);
+    }
+    .forward-item .contact-name {
+      color: white;
+    }
+
   </style>
 </head>
 
@@ -211,20 +499,31 @@
           <button id="logout-btn" class="btn-icon" title="Sair">🚪</button>
         </div>
         <div class="search-bar" style="display: flex; gap: 8px;">
-          <input type="text" id="search-contact" placeholder="Buscar..." style="flex:1;">
+          <input type="text" id="search-contact" placeholder="Pesquisar..." style="flex:1;" autocomplete="off">
           <button id="new-group-btn" class="btn-icon" title="Novo Grupo"
             style="background: rgba(255,255,255,0.1); border-radius: 8px;">➕</button>
         </div>
       </div>
 
+      <!-- Área para resultados da pesquisa global -->
+      <div id="search-results"></div>
+
       <div class="contacts-list" id="contacts-list">
-        <!-- Chats e usuários carregados dinamicamente -->
-        <div class="loading-contacts">Carregando conversas...</div>
+        <div class="loading-contacts">Carregando contatos...</div>
       </div>
     </aside>
 
     <!-- Painel Central: Chat -->
-    <main class="chat-area glass-panel">
+    <main class="chat-area glass-panel" style="position: relative;">
+      
+      <!-- Drag & Drop Overlay -->
+      <div class="drag-overlay" id="drag-overlay">
+        <div class="drag-overlay-content">
+          <div>📁</div>
+          Solte os arquivos aqui para enviar
+        </div>
+      </div>
+
       <!-- Estado Vazio -->
       <div class="empty-state" id="empty-state">
         <div class="logo">
@@ -235,7 +534,7 @@
       </div>
 
       <!-- Área de Chat Ativa -->
-      <div class="active-chat" id="active-chat" style="display: none;">
+      <div class="active-chat" id="active-chat" style="display: none; height: 100%; flex-direction: column;">
         <header class="chat-header">
           <div class="chat-contact-info">
             <div class="avatar" id="chat-avatar">?</div>
@@ -247,7 +546,12 @@
           <button id="toggle-details-btn" class="btn-icon" title="Ver Detalhes do Grupo/Usuário">ℹ️</button>
         </header>
 
-        <div class="chat-messages" id="chat-messages">
+        <!-- Pinned Messages Area -->
+        <div id="pinned-messages-container" class="pinned-messages-bar" style="display: none;">
+          <!-- Pinned messages list injected here -->
+        </div>
+
+        <div class="chat-messages" id="chat-messages" style="flex: 1;">
           <!-- Mensagens renderizadas aqui -->
         </div>
 
@@ -317,7 +621,7 @@
       </div>
       <form id="form-add-member">
         <div class="form-group">
-          <label>Selecione um Usuário</label>
+          <label>Pesquise e selecione</label>
           <select id="select-new-member" required>
             <!-- Preenchido via JS -->
           </select>
@@ -327,7 +631,38 @@
     </div>
   </div>
 
+  <!-- Modal Encaminhar Mensagem -->
+  <div class="modal-overlay" id="modal-forward">
+    <div class="modal-content" style="height: 60vh;">
+      <div class="modal-header">
+        <h3>Encaminhar para...</h3>
+        <button class="close-modal" id="close-forward">✖</button>
+      </div>
+      <input type="text" id="forward-search" placeholder="Buscar na sua lista..." style="padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;">
+      <div class="forward-list" id="forward-list">
+        <!-- Contatos e grupos para encaminhar -->
+      </div>
+      <button id="btn-confirm-forward" class="btn-primary">Encaminhar (0)</button>
+    </div>
+  </div>
+
+  <!-- Visualizador de Arquivo Modal -->
+  <div class="modal-overlay" id="modal-file-viewer">
+    <div class="modal-content" id="file-viewer-content" style="width: 80vw; max-width: 900px; height: 80vh; padding: 0;">
+      <div class="modal-header" style="padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 0;">
+        <h3 id="file-viewer-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 20px;">Visualizador</h3>
+        <div style="display: flex; gap: 15px; align-items: center;">
+          <a id="download-file-btn" href="#" download class="btn-icon" title="Baixar Arquivo" style="color: white; text-decoration: none; font-size: 18px; display: none;">⬇️</a>
+          <button class="close-modal" id="close-file-viewer">✖</button>
+        </div>
+      </div>
+      <div id="file-viewer-body" style="flex: 1; overflow: auto; background: #fff; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; position: relative;">
+      </div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
   <script src="js/internal_chat.js"></script>
 </body>
 

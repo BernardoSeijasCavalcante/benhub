@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Projetos\\BenConsig\\BenHub\\benhub\\logs\\.f4f150f1fb2baa7637971333ce35ce21b10f0c1c-audit.json",
+    "files": [
+        {
+            "date": 1782073405036,
+            "name": "C:\\Projetos\\BenConsig\\BenHub\\benhub\\logs\\combined-2026-06-21.log",
+            "hash": "ca5c43663a3f398c557a5e02ddf01ff42d26ba1001b9a4e7836358fc370365f0"
+        }
+    ],
+    "hashType": "sha256"
+}
