@@ -31,6 +31,42 @@ function checkGroupAdmin(req, res, next) {
   next();
 }
 
+// Middleware/Helper auxiliar para checar permissão de chat direto
+function checkCommunicationPermission(userId, targetUserId) {
+  if (userId === targetUserId) return true; // Pode falar consigo mesmo
+  
+  const currentUser = db.prepare('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+  const targetUser = db.prepare('SELECT u.*, h.level as h_level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(targetUserId);
+
+  if (!currentUser || !targetUser) return false;
+
+  let allowed = false;
+  
+  // Regra 1: Superiores podem falar com inferiores
+  if (currentUser.h_level > targetUser.h_level) {
+    allowed = true;
+  } 
+  // Regra 2: Mesmo nível
+  else if (currentUser.h_level === targetUser.h_level) {
+    if (currentUser.allow_same_level_chat) allowed = true;
+  } 
+  // Regra 3: Nível imediatamente superior
+  else {
+    const nextLevelRow = db.prepare('SELECT MIN(level) as nextLevel FROM hierarchies WHERE level > ?').get(currentUser.h_level);
+    if (nextLevelRow && nextLevelRow.nextLevel !== null && targetUser.h_level === nextLevelRow.nextLevel) {
+      allowed = true;
+    }
+  }
+
+  // Verifica permissão explícita (solicitada e aprovada)
+  if (!allowed) {
+    const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUserId, targetUserId, userId);
+    if (explicitPerm) allowed = true;
+  }
+
+  return allowed;
+}
+
 // 1. Listar todos os chats (directs que foram adicionados à lista de contatos e groups)
 router.get('/chats', (req, res) => {
   const userId = req.user.id;
@@ -45,7 +81,7 @@ router.get('/chats', (req, res) => {
 
   // Pegar a lista de contatos do usuário (user_contacts)
   const contacts = db.prepare(`
-    SELECT uc.contact_id as other_user_id, uc.is_pinned, u.name
+    SELECT uc.contact_id as other_user_id, uc.is_pinned, u.name, u.photo_url
     FROM user_contacts uc
     JOIN users u ON uc.contact_id = u.id
     WHERE uc.user_id = ?
@@ -67,7 +103,9 @@ router.get('/chats', (req, res) => {
       type: 'direct',
       name: contact.name,
       other_user_id: contact.other_user_id,
-      is_pinned: contact.is_pinned
+      is_pinned: contact.is_pinned,
+      photo_url: contact.photo_url,
+      is_allowed: checkCommunicationPermission(userId, contact.other_user_id)
     };
   });
 
@@ -167,25 +205,7 @@ router.post('/direct', (req, res) => {
   if (!targetUserId) return res.status(400).json({ error: 'targetUserId obrigatório.' });
 
   // === VALIDAÇÃO DE HIERARQUIA ===
-  const currentUser = db.prepare('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
-  const targetUser = db.prepare('SELECT u.*, h.level as h_level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(targetUserId);
-
-  if (!currentUser || !targetUser) return res.status(404).json({ error: 'Usuário não encontrado.' });
-
-  let allowed = false;
-  if (currentUser.h_level > targetUser.h_level) {
-    allowed = true;
-  } else if (currentUser.h_level === targetUser.h_level) {
-    if (currentUser.allow_same_level_chat) allowed = true;
-  } else if (currentUser.h_level === targetUser.h_level - 1) { // 1 nível acima
-    allowed = true;
-  }
-
-  // Verifica se há permissão explícita (allowed_communications)
-  if (!allowed) {
-    const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUserId, targetUserId, userId);
-    if (explicitPerm) allowed = true;
-  }
+  const allowed = checkCommunicationPermission(userId, targetUserId);
 
   if (!allowed) {
     return res.status(403).json({ error: 'Comunicação restrita pela hierarquia. Solicite acesso.' });
@@ -222,7 +242,7 @@ router.get('/:chatId/messages', (req, res) => {
   if (!isMember) return res.status(403).json({ error: 'Acesso negado ao chat.' });
 
   const messages = db.prepare(`
-    SELECT m.*, u.name as sender_name 
+    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
     FROM internal_messages m
     JOIN users u ON m.sender_id = u.id
     WHERE m.chat_id = ? 
@@ -242,7 +262,7 @@ router.get('/:chatId/messages', (req, res) => {
 
   const chatInfo = db.prepare('SELECT * FROM internal_chats WHERE id = ?').get(chatId);
   const members = db.prepare(`
-    SELECT u.id, u.name, m.role 
+    SELECT u.id, u.name, u.photo_url, m.role 
     FROM internal_chat_members m
     JOIN users u ON m.user_id = u.id
     WHERE m.chat_id = ?
@@ -269,7 +289,7 @@ router.post('/:chatId/messages', (req, res) => {
 
   const messageId = result.lastInsertRowid;
   const newMessage = db.prepare(`
-    SELECT m.*, u.name as sender_name 
+    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
     FROM internal_messages m
     JOIN users u ON m.sender_id = u.id
     WHERE m.id = ?
@@ -313,7 +333,7 @@ router.post('/:chatId/upload', upload.single('file'), (req, res) => {
 
   const messageId = result.lastInsertRowid;
   const newMessage = db.prepare(`
-    SELECT m.*, u.name as sender_name 
+    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
     FROM internal_messages m
     JOIN users u ON m.sender_id = u.id
     WHERE m.id = ?
@@ -340,36 +360,25 @@ router.get('/search/users', (req, res) => {
   
   if (!q) return res.json({ users: [] });
 
-  const currentUser = db.prepare('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
-
   const users = db.prepare(`
-    SELECT u.id, u.name, h.level as h_level, h.name as hierarchy_name 
+    SELECT u.id, u.name, h.level as h_level, h.name as hierarchy_name, u.photo_url 
     FROM users u
     LEFT JOIN hierarchies h ON u.hierarchy_id = h.id
     WHERE u.id != ? AND u.name LIKE ?
     LIMIT 20
   `).all(userId, `%${q}%`);
   
-  // Mapeia adicionando flag requires_request
+  // Mapeia adicionando flag requires_request / is_allowed
   const mappedUsers = users.map(targetUser => {
-    let allowed = false;
-    let h_level = targetUser.h_level || 0;
-    let curr_level = currentUser.h_level || 0;
-
-    if (curr_level > h_level) allowed = true;
-    else if (curr_level === h_level && currentUser.allow_same_level_chat) allowed = true;
-    else if (curr_level === h_level - 1) allowed = true;
-
-    if (!allowed) {
-      const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUser.id, targetUser.id, userId);
-      if (explicitPerm) allowed = true;
-    }
+    const allowed = checkCommunicationPermission(userId, targetUser.id);
 
     return {
       id: targetUser.id,
       name: targetUser.name,
-      hierarchy_name: targetUser.hierarchy_name,
-      requires_request: !allowed
+      photo_url: targetUser.photo_url,
+      hierarchy: targetUser.hierarchy_name,
+      requires_request: !allowed,
+      is_allowed: allowed
     };
   });
 
@@ -526,7 +535,7 @@ router.post('/forward', (req, res) => {
         `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
         
         const newMessage = db.prepare(`
-          SELECT m.*, u.name as sender_name 
+          SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
           FROM internal_messages m
           JOIN users u ON m.sender_id = u.id
           WHERE m.id = ?
@@ -569,7 +578,7 @@ router.post('/forward', (req, res) => {
       `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
       
       const newMessage = db.prepare(`
-        SELECT m.*, u.name as sender_name 
+        SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
         FROM internal_messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.id = ?

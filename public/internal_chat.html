@@ -490,7 +490,8 @@
 
       <div class="sidebar-header">
         <div class="user-profile">
-          <div class="avatar" id="operator-avatar">O</div>
+          <div class="avatar" id="operator-avatar" style="cursor: pointer;" title="Alterar Foto de Perfil">O</div>
+          <input type="file" id="profile-photo-input" style="display: none;" accept="image/*">
           <div class="user-info">
             <span class="user-name" id="operator-name">Carregando...</span>
             <span class="status-indicator online">Online</span>
@@ -658,6 +659,14 @@
       </div>
       <div id="file-viewer-body" style="flex: 1; overflow: auto; background: #fff; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; position: relative;">
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Imagem Expandida -->
+  <div class="modal-overlay" id="modal-image-viewer">
+    <div class="modal-content" style="width: auto; height: auto; max-width: 90vw; max-height: 90vh; padding: 10px; background: transparent; border: none; box-shadow: none; display: flex; align-items: center; justify-content: center;">
+      <button class="close-modal" id="close-image-viewer" style="position: absolute; top: -30px; right: 0; font-size: 24px; color: #fff;">✖</button>
+      <img id="expanded-image" src="" style="max-width: 100%; max-height: 85vh; border-radius: 8px; object-fit: contain;">
     </div>
   </div>
 

@@ -4,6 +4,19 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../db/database');
 const { authenticateToken } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../../public/uploads/'));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
 
 router.post('/login', (req, res) => {
   const { email, password } = req.body;
@@ -25,7 +38,7 @@ router.post('/login', (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: user.role, name: user.name, contact_number: user.contact_number },
+    { id: user.id, email: user.email, role: user.role, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url },
     process.env.JWT_SECRET || 'super_secret_jwt_key_here',
     { expiresIn: '24h' }
   );
@@ -37,9 +50,19 @@ router.post('/login', (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      contact_number: user.contact_number
+      contact_number: user.contact_number,
+      photo_url: user.photo_url
     }
   });
+});
+
+router.post('/upload-photo', authenticateToken, upload.single('photo'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+  }
+  const photoUrl = '/uploads/' + req.file.filename;
+  db.prepare('UPDATE users SET photo_url = ? WHERE id = ?').run(photoUrl, req.user.id);
+  res.json({ photo_url: photoUrl });
 });
 
 router.get('/me', authenticateToken, (req, res) => {

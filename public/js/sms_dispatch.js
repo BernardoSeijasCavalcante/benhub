@@ -15,7 +15,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // UI Setup
   document.getElementById('operator-name').textContent = user.name;
-  document.getElementById('operator-avatar').textContent = user.name.charAt(0).toUpperCase();
+  const operatorAvatar = document.getElementById('operator-avatar');
+  if (user.photo_url) {
+    operatorAvatar.textContent = '';
+    operatorAvatar.style.backgroundImage = `url(${user.photo_url})`;
+    operatorAvatar.style.backgroundSize = 'cover';
+    operatorAvatar.style.backgroundPosition = 'center';
+  } else {
+    operatorAvatar.textContent = user.name.charAt(0).toUpperCase();
+  }
 
   if (user.role === 'admin') {
     document.getElementById('admin-btn').style.display = 'block';

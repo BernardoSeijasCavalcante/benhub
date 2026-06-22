@@ -116,7 +116,8 @@ router.post('/users', (req, res) => {
     `).run(name, email, passwordHash, hierarchyId, contactNumber);
 
     res.status(201).json({ id: result.lastInsertRowid, name, email, hierarchyId, contactNumber });
-  } catch (error) {
+    } catch (error) {
+    console.error('Error in POST /users:', error);
     res.status(500).json({ error: 'Erro ao criar usuário.' });
   }
 });
@@ -142,6 +143,7 @@ router.put('/users/:id', (req, res) => {
     db.prepare(query).run(...params);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error in PUT /users/:id:', error);
     res.status(500).json({ error: 'Erro ao atualizar usuário.' });
   }
 });

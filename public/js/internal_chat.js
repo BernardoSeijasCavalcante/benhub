@@ -8,7 +8,69 @@ document.addEventListener('DOMContentLoaded', () => {
   // Elementos UI Globais
   const currentUser = JSON.parse(localStorage.getItem('benhub_user'));
   document.getElementById('operator-name').textContent = currentUser.name;
-  document.getElementById('operator-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+  const operatorAvatar = document.getElementById('operator-avatar');
+  if (currentUser.photo_url) {
+    operatorAvatar.textContent = '';
+    operatorAvatar.style.backgroundImage = `url(${currentUser.photo_url})`;
+    operatorAvatar.style.backgroundSize = 'cover';
+    operatorAvatar.style.backgroundPosition = 'center';
+  } else {
+    operatorAvatar.textContent = currentUser.name.charAt(0).toUpperCase();
+  }
+
+  const profilePhotoInput = document.getElementById('profile-photo-input');
+  if (profilePhotoInput) {
+    operatorAvatar.addEventListener('click', () => {
+      profilePhotoInput.click();
+    });
+    profilePhotoInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('photo', file);
+      try {
+        const res = await fetch('/api/auth/upload-photo', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (data.photo_url) {
+          currentUser.photo_url = data.photo_url;
+          localStorage.setItem('benhub_user', JSON.stringify(currentUser));
+          operatorAvatar.textContent = '';
+          operatorAvatar.style.backgroundImage = `url(${data.photo_url})`;
+          operatorAvatar.style.backgroundSize = 'cover';
+          operatorAvatar.style.backgroundPosition = 'center';
+        }
+      } catch (err) {
+        console.error('Erro ao enviar foto:', err);
+      }
+    });
+  }
+
+  // Lógica de visualização expandida de fotos de perfis (avatares)
+  const imageViewerModal = document.getElementById('modal-image-viewer');
+  const expandedImage = document.getElementById('expanded-image');
+  const closeImageViewerBtn = document.getElementById('close-image-viewer');
+  
+  if (closeImageViewerBtn) {
+    closeImageViewerBtn.addEventListener('click', () => {
+      imageViewerModal.classList.remove('active');
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    const avatarTarget = e.target.closest('.avatar, .detail-avatar');
+    if (avatarTarget && avatarTarget.id !== 'operator-avatar') {
+      const bgImage = avatarTarget.style.backgroundImage;
+      if (bgImage && bgImage !== 'none') {
+        const url = bgImage.slice(4, -1).replace(/["']/g, "");
+        expandedImage.src = url;
+        imageViewerModal.classList.add('active');
+      }
+    }
+  });
 
   if (currentUser.role === 'admin') {
     const adminBtn = document.getElementById('admin-btn');
@@ -74,19 +136,24 @@ document.addEventListener('DOMContentLoaded', () => {
       const el = document.createElement('div');
       el.className = `contact-item ${activeChatId === chat.id && chat.id !== null ? 'active' : ''}`;
       
-      let avatarLetter = chat.name ? chat.name.charAt(0).toUpperCase() : '?';
+      let avatarLetter = '';
       let avatarClass = chat.type === 'group' ? 'group-avatar' : '';
       let style = chat.color ? `background-color: ${chat.color}; color: #000;` : '';
-      let isGroup = chat.type === 'group';
-
-      let pinIcon = chat.is_pinned ? '<span class="pin-icon">📌</span>' : '';
+      if (chat.photo_url) {
+        style += `background-image: url(${chat.photo_url}); background-size: cover; background-position: center;`;
+      } else {
+        avatarLetter = chat.name ? chat.name.charAt(0).toUpperCase() : '?';
+      }
+      const isGroup = chat.type === 'group';
+      const pinIcon = chat.is_pinned ? '<span title="Fixado" style="font-size:10px; margin-left:5px;">📌</span>' : '';
+      const lockIcon = (chat.type === 'direct' && chat.is_allowed === false) ? '<span title="Acesso Restrito" style="font-size:12px; margin-left:5px;">🔒</span>' : '';
 
       el.innerHTML = `
         <div class="avatar ${avatarClass}" style="${style}">${avatarLetter}</div>
         <div class="contact-info" style="flex:1;">
           <div class="contact-header">
             <span class="contact-name">${chat.name || 'Chat sem nome'}</span>
-            ${pinIcon}
+            ${pinIcon}${lockIcon}
           </div>
           <span class="contact-last-msg">${isGroup ? 'Grupo' : 'Contato'}</span>
         </div>
@@ -99,10 +166,16 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clicar para abrir chat
       el.addEventListener('click', (e) => {
         if (e.target.closest('.contact-actions')) return; // ignora se clicou nos botões
+        
+        if (chat.type === 'direct' && chat.is_allowed === false) {
+          alert('Acesso restrito. Sua hierarquia atual não permite iniciar ou visualizar este chat direto.');
+          return;
+        }
+
         if (chat.type === 'direct' && chat.id === null) {
           startDirectChat(chat.other_user_id, chat.name);
         } else {
-          openChat(chat.id, chat.name, chat.type, chat.color);
+          openChat(chat.id, chat.name, chat.type, chat.color, chat.photo_url);
         }
       });
 
@@ -179,11 +252,17 @@ document.addEventListener('DOMContentLoaded', () => {
             el.className = 'search-item';
             
             if (existingContact) {
+              const lockIcon = !u.is_allowed ? ' <span title="Acesso Restrito" style="font-size: 12px;">🔒</span>' : '';
               el.innerHTML = `
-                <span>${u.name}</span>
+                <span>${u.name}${lockIcon}</span>
                 <button class="btn-add-contact" style="background:var(--bg-secondary); border:1px solid var(--accent-gold); color:var(--accent-gold);">Conversar</button>
               `;
               el.querySelector('button').addEventListener('click', () => {
+                if (!u.is_allowed) {
+                  alert('Acesso restrito. Sua hierarquia atual não permite contatar este usuário diretamente.');
+                  return;
+                }
+                
                 searchInput.value = '';
                 searchResults.style.display = 'none';
                 // Trigger evento local para restaurar a lista
@@ -192,15 +271,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (existingContact.id === null) {
                   startDirectChat(existingContact.other_user_id, existingContact.name);
                 } else {
-                  openChat(existingContact.id, existingContact.name, 'direct', existingContact.color);
+                  openChat(existingContact.id, existingContact.name, 'direct', existingContact.color, existingContact.photo_url);
                 }
               });
             } else {
+              const lockIcon = !u.is_allowed ? ' <span title="Acesso Restrito" style="font-size: 12px;">🔒</span>' : '';
               el.innerHTML = `
-                <span>${u.name}</span>
+                <span>${u.name}${lockIcon}</span>
                 <button class="btn-add-contact">Adicionar</button>
               `;
               el.querySelector('button').addEventListener('click', async () => {
+                if (!u.is_allowed) {
+                  alert('Acesso restrito. Sua hierarquia atual não permite contatar este usuário diretamente.');
+                  return;
+                }
+                
                 await fetch('/api/internal-chat/contacts', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -215,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const newContact = allMyChats.find(c => c.type === 'direct' && c.other_user_id === u.id);
                 if (newContact) {
                   if (newContact.id === null) startDirectChat(newContact.other_user_id, newContact.name);
-                  else openChat(newContact.id, newContact.name, 'direct');
+                  else openChat(newContact.id, newContact.name, 'direct', null, currentUser.photo_url); // Corrigindo user para currentUser
                 }
               });
             }
@@ -239,8 +324,15 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ targetUserId })
       });
       const data = await res.json();
+      
+      if (!res.ok) {
+        alert(data.error || 'Erro ao iniciar chat.');
+        closeChat();
+        return;
+      }
+      
       await loadChats();
-      openChat(data.chatId, targetUserName, 'direct');
+      openChat(data.chatId, targetUserName, 'direct', null, null); // Photo will be loaded if available when list refreshes
     } catch (error) {
       console.error(error);
     }
@@ -253,8 +345,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('sidebar-right').classList.remove('active');
   }
 
-  async function openChat(chatId, chatName, chatType, color = null) {
-    if (activeChatId) socket.emit('leave_internal_chat', activeChatId);
+  async function openChat(chatId, chatName, chatType, color = null, photoUrl = null) {
+    if (activeChatId) {
+      socket.emit('leave_internal_chat', activeChatId);
+    }
     activeChatId = chatId;
     activeChatType = chatType;
     socket.emit('join_internal_chat', chatId);
@@ -265,13 +359,23 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chat-contact-name').textContent = chatName;
     document.getElementById('chat-contact-desc').textContent = chatType === 'group' ? 'Grupo' : 'Chat Direto';
     const avatar = document.getElementById('chat-avatar');
-    avatar.textContent = chatName.charAt(0).toUpperCase();
-    if(color) {
-      avatar.style.backgroundColor = color;
-      avatar.style.color = '#000';
+    
+    if (photoUrl) {
+      avatar.textContent = '';
+      avatar.style.backgroundImage = `url(${photoUrl})`;
+      avatar.style.backgroundSize = 'cover';
+      avatar.style.backgroundPosition = 'center';
+      avatar.style.backgroundColor = 'transparent';
     } else {
-      avatar.style.backgroundColor = 'var(--primary-color)';
-      avatar.style.color = '#fff';
+      avatar.style.backgroundImage = 'none';
+      avatar.textContent = chatName.charAt(0).toUpperCase();
+      if(color) {
+        avatar.style.backgroundColor = color;
+        avatar.style.color = '#000';
+      } else {
+        avatar.style.backgroundColor = 'var(--primary-color)';
+        avatar.style.color = '#fff';
+      }
     }
 
     renderContactsList(); // Atualizar item ativo
@@ -310,9 +414,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function createMessageElement(msg) {
     const isMine = msg.sender_id === currentUser.id;
+    
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.alignItems = 'flex-end';
+    wrapper.style.gap = '8px';
+    wrapper.style.alignSelf = isMine ? 'flex-end' : 'flex-start';
+    if (isMine) wrapper.style.flexDirection = 'row-reverse';
+
+    let avatarHtml = '';
+    if (!isMine) {
+      let style = msg.sender_photo_url ? `background-image: url(${msg.sender_photo_url}); background-size: cover; background-position: center; color: transparent;` : '';
+      let letter = msg.sender_photo_url ? '' : (msg.sender_name ? msg.sender_name.charAt(0).toUpperCase() : '?');
+      avatarHtml = `<div class="avatar detail-avatar" style="width: 30px; height: 30px; font-size: 14px; flex-shrink: 0; cursor: pointer; ${style}" title="${msg.sender_name}">${letter}</div>`;
+    }
+
     const el = document.createElement('div');
     el.className = `message ${isMine ? 'operator' : 'customer'}`;
     el.dataset.msgId = msg.id;
+    el.style.margin = '0';
     
     const timeString = msg.created_at.includes('Z') ? msg.created_at : msg.created_at + 'Z';
     const time = new Date(timeString).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -793,7 +913,7 @@ document.addEventListener('DOMContentLoaded', () => {
       body: JSON.stringify({ userId })
     });
     document.getElementById('modal-add-member').classList.remove('active');
-    openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color);
+    openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
   });
 
   // File Viewer

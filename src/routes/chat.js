@@ -46,10 +46,10 @@ router.post('/send', async (req, res) => {
 
   // Templates
   const templates = [
-    `Olá {{cliente}}! Sou o(a) {{operador}}, consultor(a) comercial da BenConsig! Venha me contatar por Whatsapp: https://wa.me/{{contato}}`,
-    `Oi {{cliente}}, tudo bem? Aqui é o(a) {{operador}}, da BenConsig. Estou à disposição no Whatsapp: https://wa.me/{{contato}}`,
-    `Olá {{cliente}}, meu nome é {{operador}} e sou consultor(a) na BenConsig. Me chame no Whatsapp para conversarmos: https://wa.me/{{contato}}`,
-    `Bom dia/boa tarde, {{cliente}}! Sou {{operador}}, da equipe BenConsig. Aguardo seu contato no Whatsapp: https://wa.me/{{contato}}`
+    `Olá {{cliente}}! Sou o(a) {{operador}}, consultor(a) comercial da BenConsig! Venha me contatar por Whatsapp: https://wa.me/{{contato}}?text=Olá!`,
+    `Oi {{cliente}}, tudo bem? Aqui é o(a) {{operador}}, da BenConsig. Estou à disposição no Whatsapp: https://wa.me/{{contato}}?text=Olá!`,
+    `Olá {{cliente}}, meu nome é {{operador}} e sou consultor(a) na BenConsig. Me chame no Whatsapp para conversarmos: https://wa.me/{{contato}}?text=Olá!`,
+    `Bom dia/boa tarde, {{cliente}}! Sou {{operador}}, da equipe BenConsig. Aguardo seu contato no Whatsapp: https://wa.me/{{contato}}?text=Olá!`
   ];
 
   // Escolhe template aleatório

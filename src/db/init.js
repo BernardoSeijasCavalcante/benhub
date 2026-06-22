@@ -24,6 +24,7 @@ function initDb() {
       password_hash TEXT NOT NULL,
       hierarchy_id INTEGER,
       contact_number TEXT,
+      photo_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (hierarchy_id) REFERENCES hierarchies (id)
     )
