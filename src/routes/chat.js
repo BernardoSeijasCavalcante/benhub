@@ -36,13 +36,20 @@ router.get('/recent', (req, res) => {
 
 // Enviar nova mensagem (Disparo Único com template)
 router.post('/send', async (req, res) => {
-  const { phone, clientName } = req.body;
+  let { phone, clientName } = req.body;
   const operatorName = req.user.name;
   const operatorContact = req.user.contact_number || '00000000000'; // Fallback se não configurado
 
   if (!phone || !clientName) {
     return res.status(400).json({ error: 'Telefone e Nome do Cliente são obrigatórios.' });
   }
+
+  // Remove formatação do telefone (mantém apenas números)
+  phone = phone.replace(/\D/g, '');
+
+  // Formata o nome para que apenas a primeira letra seja maiúscula
+  clientName = clientName.trim().toLowerCase();
+  clientName = clientName.charAt(0).toUpperCase() + clientName.slice(1);
 
   if (req.user.role === 'operator') {
     const existingMessage = db.prepare(`
