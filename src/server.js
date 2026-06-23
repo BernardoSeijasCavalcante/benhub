@@ -7,6 +7,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
+const db = require('./db/database');
 
 const app = express();
 const server = http.createServer(app);
@@ -74,6 +75,32 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   logger.info(`Servidor rodando na porta ${PORT}`);
+  
+  // Rotina de timeout: Expira SMS pendentes a mais de 4 minutos
+  setInterval(() => {
+    try {
+      const expiredMessages = db.prepare(`
+        SELECT id FROM messages 
+        WHERE status = 'pending' AND timestamp < datetime('now', '-4 minutes')
+      `).all();
+
+      if (expiredMessages.length > 0) {
+        const updateStmt = db.prepare(`UPDATE messages SET status = 'failed' WHERE id = ?`);
+        
+        db.transaction((messages) => {
+          for (const msg of messages) {
+            updateStmt.run(msg.id);
+            // Emite evento para os clientes conectados para que atualizem a interface para "Erro"
+            io.emit('message_status_update', { messageId: msg.id, status: 'failed' });
+          }
+        })(expiredMessages);
+        
+        logger.info(`Timeout rotina: ${expiredMessages.length} mensagens expiradas atualizadas para 'failed'.`);
+      }
+    } catch (err) {
+      logger.error('Erro na rotina de timeout de SMS:', err);
+    }
+  }, 60 * 1000); // 1 minuto
 });
 
 // Tratamento de exceções não capturadas
