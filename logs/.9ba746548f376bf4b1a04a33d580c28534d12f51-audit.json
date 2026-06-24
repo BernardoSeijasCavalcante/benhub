@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\INTEL\\OneDrive\\Desktop\\Projetos\\BenHub\\benhub\\logs\\.9ba746548f376bf4b1a04a33d580c28534d12f51-audit.json",
+    "files": [
+        {
+            "date": 1782147583029,
+            "name": "C:\\Users\\INTEL\\OneDrive\\Desktop\\Projetos\\BenHub\\benhub\\logs\\error-2026-06-22.log",
+            "hash": "dfda5b5da1e1180b9a8853f099c6a757447af54defe5c0e7aea21e994cb6aed4"
+        }
+    ],
+    "hashType": "sha256"
+}
