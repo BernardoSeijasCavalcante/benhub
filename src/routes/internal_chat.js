@@ -31,6 +31,18 @@ function checkGroupAdmin(req, res, next) {
   next();
 }
 
+// Middleware para verificar se o usuário pertence à hierarquia mais alta
+function checkHighestHierarchy(req, res, next) {
+  const userId = req.user.id;
+  const userRow = db.prepare('SELECT h.level FROM users u JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+  const maxRow = db.prepare('SELECT MAX(level) as maxLevel FROM hierarchies').get();
+
+  if (!userRow || userRow.level < maxRow.maxLevel) {
+    return res.status(403).json({ error: 'Acesso negado. Apenas usuários da hierarquia mais alta podem realizar esta ação.' });
+  }
+  next();
+}
+
 // Middleware/Helper auxiliar para checar permissão de chat direto
 function checkCommunicationPermission(userId, targetUserId) {
   if (userId === targetUserId) return true; // Pode falar consigo mesmo
@@ -67,17 +79,38 @@ function checkCommunicationPermission(userId, targetUserId) {
   return allowed;
 }
 
-// 1. Listar todos os chats (directs que foram adicionados à lista de contatos e groups)
+// 1. Listar todos os chats (directs e groups)
 router.get('/chats', (req, res) => {
   const userId = req.user.id;
 
-  // Pegar todos os grupos onde o usuário é membro
-  const groups = db.prepare(`
-    SELECT c.*, m.is_pinned 
+  // Pegar todos os chats (grupos e diretos) onde o usuário é membro
+  const activeChats = db.prepare(`
+    SELECT c.*, m.is_pinned, m.unread_count 
     FROM internal_chats c
     JOIN internal_chat_members m ON c.id = m.chat_id
-    WHERE m.user_id = ? AND c.type = 'group'
+    WHERE m.user_id = ?
   `).all(userId);
+
+  // Processar chats para incluir nomes e fotos no caso de directs
+  const processedChats = activeChats.map(chat => {
+    if (chat.type === 'group') return chat;
+
+    // É direct, pegar o outro membro
+    const otherMember = db.prepare(`
+      SELECT u.id as other_user_id, u.name, u.photo_url
+      FROM internal_chat_members m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.chat_id = ? AND m.user_id != ?
+    `).get(chat.id, userId);
+
+    if (otherMember) {
+      chat.name = otherMember.name;
+      chat.photo_url = otherMember.photo_url;
+      chat.other_user_id = otherMember.other_user_id;
+      chat.is_allowed = checkCommunicationPermission(userId, otherMember.other_user_id);
+    }
+    return chat;
+  });
 
   // Pegar a lista de contatos do usuário (user_contacts)
   const contacts = db.prepare(`
@@ -87,36 +120,32 @@ router.get('/chats', (req, res) => {
     WHERE uc.user_id = ?
   `).all(userId);
 
-  // Para os contatos, precisamos ver se já existe um chat_id 'direct' com eles, senão envia sem chatId por enquanto
-  // (O chat será criado ao enviar a primeira mensagem via POST /direct)
-  const processedContacts = contacts.map(contact => {
-    const existingChat = db.prepare(`
-      SELECT m1.chat_id
-      FROM internal_chat_members m1
-      JOIN internal_chat_members m2 ON m1.chat_id = m2.chat_id
-      JOIN internal_chats c ON c.id = m1.chat_id
-      WHERE c.type = 'direct' AND m1.user_id = ? AND m2.user_id = ?
-    `).get(userId, contact.other_user_id);
-
-    return {
-      id: existingChat ? existingChat.chat_id : null,
-      type: 'direct',
-      name: contact.name,
-      other_user_id: contact.other_user_id,
-      is_pinned: contact.is_pinned,
-      photo_url: contact.photo_url,
-      is_allowed: checkCommunicationPermission(userId, contact.other_user_id)
-    };
+  const newContacts = [];
+  contacts.forEach(contact => {
+    // Verifica se já não existe na processedChats
+    const exists = processedChats.find(c => c.type === 'direct' && c.other_user_id === contact.other_user_id);
+    if (!exists) {
+      newContacts.push({
+        id: null,
+        type: 'direct',
+        name: contact.name,
+        other_user_id: contact.other_user_id,
+        is_pinned: contact.is_pinned,
+        photo_url: contact.photo_url,
+        is_allowed: checkCommunicationPermission(userId, contact.other_user_id),
+        unread_count: 0,
+        last_message_at: null
+      });
+    }
   });
 
-  const allChats = [...groups, ...processedContacts];
+  const allChats = [...processedChats, ...newContacts];
 
-  // Vamos ordenar no frontend, mas no backend mandamos tudo em "chats"
   res.json({ chats: allChats });
 });
 
 // 2. Criar um novo grupo
-router.post('/groups', (req, res) => {
+router.post('/groups', checkHighestHierarchy, (req, res) => {
   const { name, description, color, photo_url } = req.body;
   const userId = req.user.id;
 
@@ -161,8 +190,8 @@ router.put('/:chatId/group', checkGroupAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// 4. Adicionar membro ao grupo (apenas admin)
-router.post('/:chatId/members', checkGroupAdmin, (req, res) => {
+// 4. Adicionar membro ao grupo (apenas hierarquia mais alta e admin)
+router.post('/:chatId/members', checkHighestHierarchy, checkGroupAdmin, (req, res) => {
   const { chatId } = req.params;
   const { userId } = req.body;
 
@@ -233,6 +262,14 @@ router.post('/direct', (req, res) => {
   res.json({ chatId });
 });
 
+// 5.5. Marcar chat como lido
+router.put('/:chatId/read', (req, res) => {
+  const { chatId } = req.params;
+  const userId = req.user.id;
+  db.prepare('UPDATE internal_chat_members SET unread_count = 0 WHERE chat_id = ? AND user_id = ?').run(chatId, userId);
+  res.json({ success: true });
+});
+
 // 6. Obter histórico de mensagens de um chat
 router.get('/:chatId/messages', (req, res) => {
   const { chatId } = req.params;
@@ -287,6 +324,10 @@ router.post('/:chatId/messages', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(chatId, userId, content_type || 'text', content || '', file_url || null, forwarded);
 
+  // Update last_message_at and unread_count
+  db.prepare('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
+  db.prepare('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?').run(chatId, userId);
+
   const messageId = result.lastInsertRowid;
   const newMessage = db.prepare(`
     SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
@@ -330,6 +371,10 @@ router.post('/:chatId/upload', upload.single('file'), (req, res) => {
     INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url)
     VALUES (?, ?, ?, ?, ?)
   `).run(chatId, userId, contentType, req.file.originalname, fileUrl);
+
+  // Update last_message_at and unread_count
+  db.prepare('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
+  db.prepare('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?').run(chatId, userId);
 
   const messageId = result.lastInsertRowid;
   const newMessage = db.prepare(`
@@ -534,6 +579,10 @@ router.post('/forward', (req, res) => {
           VALUES (?, ?, ?, ?, ?, 1)
         `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
         
+        // Update last_message_at and unread_count
+        db.prepare('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
+        db.prepare('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?').run(chatId, userId);
+
         const newMessage = db.prepare(`
           SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
           FROM internal_messages m
@@ -577,6 +626,10 @@ router.post('/forward', (req, res) => {
         VALUES (?, ?, ?, ?, ?, 1)
       `).run(chatId, userId, originalMsg.content_type, originalMsg.content, originalMsg.file_url);
       
+      // Update last_message_at and unread_count
+      db.prepare('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?').run(chatId);
+      db.prepare('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?').run(chatId, userId);
+
       const newMessage = db.prepare(`
         SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
         FROM internal_messages m

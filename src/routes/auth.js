@@ -40,8 +40,17 @@ router.post('/login', (req, res) => {
   const hierarchy = db.prepare('SELECT can_manage_system FROM hierarchies WHERE id = ?').get(user.hierarchy_id);
   const computedRole = (hierarchy && hierarchy.can_manage_system === 1) ? 'admin' : 'operator';
 
+  db.prepare('UPDATE users SET session_version = COALESCE(session_version, 0) + 1 WHERE id = ?').run(user.id);
+  const updatedUser = db.prepare('SELECT session_version FROM users WHERE id = ?').get(user.id);
+  const newSessionVersion = updatedUser.session_version;
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to('user_' + user.id).emit('force_logout');
+  }
+
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: computedRole, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url },
+    { id: user.id, email: user.email, role: computedRole, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url, session_version: newSessionVersion },
     process.env.JWT_SECRET || 'super_secret_jwt_key_here',
     { expiresIn: '24h' }
   );

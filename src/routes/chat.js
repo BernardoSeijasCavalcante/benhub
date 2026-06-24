@@ -47,9 +47,13 @@ router.post('/send', async (req, res) => {
   // Remove formatação do telefone (mantém apenas números)
   phone = phone.replace(/\D/g, '');
 
-  // Formata o nome para que apenas a primeira letra seja maiúscula
-  clientName = clientName.trim().toLowerCase();
-  clientName = clientName.charAt(0).toUpperCase() + clientName.slice(1);
+  // Formata o nome para que a primeira letra de cada palavra seja maiúscula
+  clientName = clientName
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 
   if (req.user.role === 'operator') {
     const existingMessage = db.prepare(`

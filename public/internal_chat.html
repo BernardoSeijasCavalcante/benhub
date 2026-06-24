@@ -474,6 +474,72 @@
       color: white;
     }
 
+    /* Unread Badge */
+    .unread-badge {
+      background-color: #25D366; /* WhatsApp Green */
+      color: white;
+      font-size: 11px;
+      font-weight: bold;
+      border-radius: 50%;
+      min-width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      margin-left: 5px;
+    }
+
+    /* Toast Notifications Container */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chat-toast {
+      background: var(--bg-secondary);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-left: 4px solid #25D366;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: white;
+      min-width: 250px;
+      max-width: 350px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      transform: translateX(120%);
+      transition: transform 0.3s ease-out;
+    }
+
+    .chat-toast.show {
+      transform: translateX(0);
+    }
+
+    .chat-toast-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      font-size: 13px;
+      color: var(--accent-gold);
+    }
+
+    .chat-toast-body {
+      font-size: 12px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
   </style>
 </head>
 
@@ -620,15 +686,12 @@
         <h3>Adicionar Membro</h3>
         <button class="close-modal" id="close-add-member">✖</button>
       </div>
-      <form id="form-add-member">
-        <div class="form-group">
-          <label>Pesquise e selecione</label>
-          <select id="select-new-member" required>
-            <!-- Preenchido via JS -->
-          </select>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <input type="text" id="search-new-member" placeholder="Pesquisar usuário..." style="padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" autocomplete="off">
+        <div id="add-member-search-results" style="max-height: 200px; overflow-y: auto;">
+          <!-- Resultados da busca vão aqui -->
         </div>
-        <button type="submit" class="btn-primary">Adicionar</button>
-      </form>
+      </div>
     </div>
   </div>
 
@@ -669,6 +732,9 @@
       <img id="expanded-image" src="" style="max-width: 100%; max-height: 85vh; border-radius: 8px; object-fit: contain;">
     </div>
   </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>

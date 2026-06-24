@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.emit('authenticate', token);
   });
 
+  socket.on('force_logout', () => {
+    alert('Você fez login em outro dispositivo. Esta sessão foi encerrada.');
+    localStorage.removeItem('benhub_token');
+    localStorage.removeItem('benhub_user');
+    window.location.href = '/';
+  });
+
   // UI Setup
   document.getElementById('operator-name').textContent = user.name;
   const operatorAvatar = document.getElementById('operator-avatar');

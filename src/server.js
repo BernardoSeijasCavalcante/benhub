@@ -59,11 +59,22 @@ io.on('connection', (socket) => {
   socket.on('authenticate', (token) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_here');
+      
+      const dbUser = db.prepare('SELECT session_version FROM users WHERE id = ?').get(decoded.id);
+      if (!dbUser || dbUser.session_version !== decoded.session_version) {
+        socket.emit('force_logout');
+        socket.disconnect(true);
+        logger.warn(`Socket ${socket.id} rejeitado devido à sessão expirada para usuário ${decoded.id}`);
+        return;
+      }
+
       socket.join('user_' + decoded.id);
       socket.join('all_operators');
       logger.info(`Socket ${socket.id} autenticado como usuário ${decoded.id}`);
     } catch (e) {
       logger.warn(`Falha na autenticação do socket: ${e.message}`);
+      socket.emit('force_logout');
+      socket.disconnect(true);
     }
   });
 

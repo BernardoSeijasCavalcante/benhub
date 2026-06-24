@@ -82,6 +82,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
   socket.emit('authenticate', token);
 
+  socket.on('force_logout', () => {
+    alert('Você fez login em outro dispositivo. Esta sessão foi encerrada.');
+    localStorage.removeItem('benhub_token');
+    localStorage.removeItem('benhub_user');
+    window.location.href = '/';
+  });
+
   // Variáveis de Estado
   let activeChatId = null;
   let activeChatType = null;
@@ -108,6 +115,49 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
   }
 
+  function showNotification(title, message, chatId, chatType, color, photoUrl) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'chat-toast';
+    toast.innerHTML = `
+      <div class="chat-toast-header">
+        <span>${title}</span>
+        <button style="background:none;border:none;color:white;cursor:pointer;">✖</button>
+      </div>
+      <div class="chat-toast-body">${message}</div>
+    `;
+
+    toast.querySelector('button').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toast.remove();
+    });
+
+    toast.addEventListener('click', () => {
+      toast.remove();
+      const chat = allMyChats.find(c => c.id === chatId) || allMyChats.find(c => c.type === 'direct' && c.other_user_id === chatId);
+      if (chat) {
+        if (chat.type === 'direct' && chat.id === null) {
+          startDirectChat(chat.other_user_id, chat.name);
+        } else {
+          openChat(chat.id, chat.name, chat.type, chat.color, chat.photo_url);
+        }
+      } else {
+        openChat(chatId, title, chatType, color, photoUrl);
+      }
+    });
+
+    container.appendChild(toast);
+
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
+
   // --- CARREGAR LISTA DE CONTATOS (PESSOAL + GRUPOS) ---
   async function loadChats() {
     try {
@@ -126,9 +176,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const listEl = document.getElementById('contacts-list');
     listEl.innerHTML = '';
 
-    // Ordenar: Fixados primeiro, depois por nome
+    // Ordenar: Fixados primeiro, depois por last_message_at, depois por nome
     const sorted = [...allMyChats].sort((a, b) => {
       if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned; // 1 antes de 0
+      
+      const timeA = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const timeB = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      if (timeA !== timeB) return timeB - timeA; // Mais recente primeiro
+
       return (a.name || '').localeCompare(b.name || '');
     });
 
@@ -147,15 +202,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const isGroup = chat.type === 'group';
       const pinIcon = chat.is_pinned ? '<span title="Fixado" style="font-size:10px; margin-left:5px;">📌</span>' : '';
       const lockIcon = (chat.type === 'direct' && chat.is_allowed === false) ? '<span title="Acesso Restrito" style="font-size:12px; margin-left:5px;">🔒</span>' : '';
+      const unreadBadge = chat.unread_count > 0 ? `<div class="unread-badge">${chat.unread_count}</div>` : '';
 
       el.innerHTML = `
         <div class="avatar ${avatarClass}" style="${style}">${avatarLetter}</div>
-        <div class="contact-info" style="flex:1;">
-          <div class="contact-header">
-            <span class="contact-name">${chat.name || 'Chat sem nome'}</span>
-            ${pinIcon}${lockIcon}
+        <div class="contact-info" style="flex:1; display:flex; align-items:center;">
+          <div style="flex:1; overflow:hidden;">
+            <div class="contact-header" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              <span class="contact-name">${chat.name || 'Chat sem nome'}</span>
+              ${pinIcon}${lockIcon}
+            </div>
+            <span class="contact-last-msg">${isGroup ? 'Grupo' : 'Contato'}</span>
           </div>
-          <span class="contact-last-msg">${isGroup ? 'Grupo' : 'Contato'}</span>
+          ${unreadBadge}
         </div>
         <div class="contact-actions">
           <button class="btn-pin" title="${chat.is_pinned ? 'Desfixar' : 'Fixar'}">📌</button>
@@ -376,6 +435,13 @@ document.addEventListener('DOMContentLoaded', () => {
         avatar.style.backgroundColor = 'var(--primary-color)';
         avatar.style.color = '#fff';
       }
+    }
+
+    // Marcar como lido
+    fetch(`/api/internal-chat/${chatId}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => console.error(e));
+    const localChat = allMyChats.find(c => c.id === chatId);
+    if (localChat) {
+      localChat.unread_count = 0;
     }
 
     renderContactsList(); // Atualizar item ativo
@@ -634,9 +700,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
         container.appendChild(createMessageElement(msg));
         if (isAtBottom) container.scrollTop = container.scrollHeight;
+        
+        // Mantém como lido
+        fetch(`/api/internal-chat/${activeChatId}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => console.error(e));
       }
     } else {
-      if (msg.sender_id !== currentUser.id) playNotificationSound();
+      if (msg.sender_id !== currentUser.id) {
+        playNotificationSound();
+        
+        // Atualizar lista local
+        let chat = allMyChats.find(c => c.id === msg.chat_id);
+        if (chat) {
+          chat.unread_count = (chat.unread_count || 0) + 1;
+          chat.last_message_at = msg.created_at;
+          renderContactsList();
+          
+          let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+          showNotification(chat.name, preview, chat.id, chat.type, chat.color, chat.photo_url);
+        } else {
+          // Chat não carregado, recarregar a lista toda
+          loadChats().then(() => {
+            chat = allMyChats.find(c => c.id === msg.chat_id);
+            if (chat) {
+              let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+              showNotification(chat.name, preview, chat.id, chat.type, chat.color, chat.photo_url);
+            }
+          });
+        }
+      }
     }
   });
 
@@ -844,7 +935,8 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       });
       html += `</div>`;
-      if (isAdminOfCurrentGroup) {
+      // Adicionar Membro: deve ser admin do grupo E admin do sistema (hierarquia mais alta)
+      if (isAdminOfCurrentGroup && currentUser.role === 'admin') {
         html += `<button id="btn-open-add-member" class="btn-primary" style="margin-top: 15px;">➕ Adicionar Membro</button>`;
       }
       body.innerHTML = html;
@@ -852,17 +944,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Modal Add Membro
       const btnOpenAddMember = document.getElementById('btn-open-add-member');
       if (btnOpenAddMember) {
-        btnOpenAddMember.addEventListener('click', async () => {
-          // Fetch global users pra adicionar
-          const res = await fetch(`/api/internal-chat/search/users?q=`, { headers: { 'Authorization': `Bearer ${token}` }});
-          const data = await res.json();
-          const select = document.getElementById('select-new-member');
-          select.innerHTML = '<option value="">Selecione...</option>';
-          data.users.forEach(u => {
-            if (!currentChatMembers.find(m => m.id === u.id)) {
-              select.innerHTML += `<option value="${u.id}">${u.name}</option>`;
-            }
-          });
+        btnOpenAddMember.addEventListener('click', () => {
+          document.getElementById('search-new-member').value = '';
+          document.getElementById('add-member-search-results').innerHTML = '';
+          document.getElementById('add-member-search-results').style.display = 'none';
           document.getElementById('modal-add-member').classList.add('active');
         });
       }
@@ -877,9 +962,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Novo grupo form (simplificado)
-  document.getElementById('new-group-btn').addEventListener('click', () => {
-    document.getElementById('modal-new-group').classList.add('active');
-  });
+  // Só exibir botão de criar grupo e adicionar event listener se for admin do sistema
+  const newGroupBtn = document.getElementById('new-group-btn');
+  if (currentUser.role !== 'admin') {
+    if (newGroupBtn) newGroupBtn.style.display = 'none';
+  } else {
+    if (newGroupBtn) {
+      newGroupBtn.addEventListener('click', () => {
+        document.getElementById('modal-new-group').classList.add('active');
+      });
+    }
+  }
   document.getElementById('close-new-group').addEventListener('click', () => {
     document.getElementById('modal-new-group').classList.remove('active');
   });
@@ -903,17 +996,67 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('close-add-member').addEventListener('click', () => {
     document.getElementById('modal-add-member').classList.remove('active');
   });
-  document.getElementById('form-add-member').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const userId = document.getElementById('select-new-member').value;
-    if(!userId || !activeChatId) return;
-    await fetch(`/api/internal-chat/${activeChatId}/members`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ userId })
-    });
-    document.getElementById('modal-add-member').classList.remove('active');
-    openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
+
+  const searchNewMemberInput = document.getElementById('search-new-member');
+  const addMemberSearchResults = document.getElementById('add-member-search-results');
+  let addMemberSearchTimeout;
+
+  searchNewMemberInput.addEventListener('input', (e) => {
+    clearTimeout(addMemberSearchTimeout);
+    const q = e.target.value.trim().toLowerCase();
+
+    if (!q) {
+      addMemberSearchResults.style.display = 'none';
+      addMemberSearchResults.innerHTML = '';
+      return;
+    }
+    
+    addMemberSearchTimeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/internal-chat/search/users?q=${encodeURIComponent(q)}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        
+        addMemberSearchResults.style.display = 'block';
+        addMemberSearchResults.innerHTML = '';
+        
+        if (data.users.length === 0) {
+          addMemberSearchResults.innerHTML = '<div style="padding:10px;color:#999;font-size:12px;">Nenhum usuário encontrado.</div>';
+        } else {
+          data.users.forEach(u => {
+            const isMember = currentChatMembers.find(m => m.id === u.id);
+            const el = document.createElement('div');
+            el.className = 'search-item';
+            
+            if (isMember) {
+              el.innerHTML = `
+                <span>${u.name} <small style="color:var(--accent-gold);">(Já é membro)</small></span>
+                <button class="btn-add-contact" style="background:transparent; border:none; color:#666; cursor:default;" disabled>Membro</button>
+              `;
+            } else {
+              el.innerHTML = `
+                <span>${u.name}</span>
+                <button class="btn-add-contact" style="background:var(--bg-secondary); border:1px solid var(--accent-gold); color:var(--accent-gold);">Adicionar</button>
+              `;
+              el.querySelector('button').addEventListener('click', async () => {
+                if (!activeChatId) return;
+                await fetch(`/api/internal-chat/${activeChatId}/members`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                  body: JSON.stringify({ userId: u.id })
+                });
+                document.getElementById('modal-add-member').classList.remove('active');
+                openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
+              });
+            }
+            addMemberSearchResults.appendChild(el);
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao pesquisar:', err);
+      }
+    }, 300);
   });
 
   // File Viewer

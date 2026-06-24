@@ -25,6 +25,7 @@ function initDb() {
       hierarchy_id INTEGER,
       contact_number TEXT,
       photo_url TEXT,
+      session_version INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (hierarchy_id) REFERENCES hierarchies (id)
     )
@@ -67,6 +68,7 @@ function initDb() {
       color TEXT,
       created_by INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_message_at DATETIME,
       FOREIGN KEY (created_by) REFERENCES users (id)
     )
   `).run();
@@ -78,6 +80,7 @@ function initDb() {
       user_id INTEGER,
       role TEXT DEFAULT 'member', -- 'admin', 'member'
       is_pinned BOOLEAN DEFAULT 0,
+      unread_count INTEGER DEFAULT 0,
       joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (chat_id, user_id),
       FOREIGN KEY (chat_id) REFERENCES internal_chats (id),
