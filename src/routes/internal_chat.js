@@ -70,9 +70,13 @@ function checkCommunicationPermission(userId, targetUserId) {
     }
   }
 
-  // Verifica permissão explícita (solicitada e aprovada)
+  // Verifica permissão explícita (solicitada e aprovada ou proativa)
   if (!allowed) {
-    const explicitPerm = db.prepare('SELECT 1 FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').get(userId, targetUserId, targetUserId, userId);
+    const explicitPerm = db.prepare(`
+      SELECT 1 FROM allowed_communications 
+      WHERE ((user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?))
+      AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+    `).get(userId, targetUserId, targetUserId, userId);
     if (explicitPerm) allowed = true;
   }
 
@@ -299,13 +303,25 @@ router.get('/:chatId/messages', (req, res) => {
 
   const chatInfo = db.prepare('SELECT * FROM internal_chats WHERE id = ?').get(chatId);
   const members = db.prepare(`
-    SELECT u.id, u.name, u.photo_url, m.role 
+    SELECT u.id, u.name, u.photo_url, m.role, h.level as h_level
     FROM internal_chat_members m
     JOIN users u ON m.user_id = u.id
+    LEFT JOIN hierarchies h ON u.hierarchy_id = h.id
     WHERE m.chat_id = ?
   `).all(chatId);
 
-  res.json({ messages, chatInfo, members });
+  let explicitPermission = null;
+  if (chatInfo && chatInfo.type === 'direct' && members.length === 2) {
+    const otherMember = members.find(m => m.id !== userId);
+    if (otherMember) {
+      explicitPermission = db.prepare(`
+        SELECT * FROM allowed_communications 
+        WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)
+      `).get(userId, otherMember.id, otherMember.id, userId);
+    }
+  }
+
+  res.json({ messages, chatInfo, members, explicitPermission });
 });
 
 // 7. Enviar mensagem
@@ -723,7 +739,7 @@ router.post('/requests/:id/reject', (req, res) => {
 
 // Liberação proativa por usuário superior (Botão "Liberar Contato" sem request)
 router.post('/allow-contact', (req, res) => {
-  const { targetId } = req.body;
+  const { targetId, days } = req.body;
   const userId = req.user.id;
 
   const currentUser = db.prepare('SELECT h.level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
@@ -734,7 +750,35 @@ router.post('/allow-contact', (req, res) => {
     return res.status(403).json({ error: 'Somente níveis superiores podem liberar contato ativamente.' });
   }
 
-  db.prepare('INSERT OR IGNORE INTO allowed_communications (user_a_id, user_b_id, granted_by) VALUES (?, ?, ?)').run(userId, targetId, userId);
+  let expiresAt = null;
+  if (days && !isNaN(parseInt(days))) {
+    // Calcula datetime: CURRENT_TIMESTAMP + days
+    expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + parseInt(days));
+    expiresAt = expiresAt.toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
+  }
+
+  // Primeiro remove se já existe para atualizar
+  db.prepare('DELETE FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').run(userId, targetId, targetId, userId);
+
+  db.prepare('INSERT INTO allowed_communications (user_a_id, user_b_id, granted_by, expires_at) VALUES (?, ?, ?, ?)').run(userId, targetId, userId, expiresAt);
+  
+  res.json({ success: true });
+});
+
+// Revogar liberação proativa
+router.post('/revoke-contact', (req, res) => {
+  const { targetId } = req.body;
+  const userId = req.user.id;
+
+  const currentUser = db.prepare('SELECT h.level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(userId);
+  const targetUser = db.prepare('SELECT h.level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?').get(targetId);
+
+  if (!currentUser || !targetUser || currentUser.level < targetUser.level) {
+    return res.status(403).json({ error: 'Somente níveis superiores podem revogar contato ativamente.' });
+  }
+
+  db.prepare('DELETE FROM allowed_communications WHERE (user_a_id = ? AND user_b_id = ?) OR (user_a_id = ? AND user_b_id = ?)').run(userId, targetId, targetId, userId);
   
   res.json({ success: true });
 });

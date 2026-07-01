@@ -29,6 +29,11 @@
             "date": 1782321420569,
             "name": "C:\\Projetos\\BenHub\\logs\\combined-2026-06-24.log",
             "hash": "504b4339fa94e708c6b15081e218563350b088db27c77cd475267b50c2dc33df"
+        },
+        {
+            "date": 1782920803283,
+            "name": "C:\\Projetos\\BenHub\\logs\\combined-2026-07-01.log",
+            "hash": "243e2f3a8aba36f518854309a699b1661503b9db4fc9da844fb5950807109aa2"
         }
     ],
     "hashType": "sha256"

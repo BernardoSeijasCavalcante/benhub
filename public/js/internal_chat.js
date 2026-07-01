@@ -455,6 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentChatInfo = data.chatInfo;
       currentChatMembers = data.members;
       currentMessages = data.messages;
+      window.currentChatExplicitPermission = data.explicitPermission; // guardando globalmente para usar no painel
       
       const myMemberInfo = currentChatMembers.find(m => m.id === currentUser.id);
       isAdminOfCurrentGroup = myMemberInfo && myMemberInfo.role === 'admin';
@@ -905,10 +906,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- DETAILS E OUTROS MODALS (SIMPLIFICADO) ---
   document.getElementById('toggle-details-btn').addEventListener('click', () => {
-    document.getElementById('sidebar-right').classList.toggle('active');
+    document.getElementById('sidebar-right').classList.toggle('hidden');
   });
   document.getElementById('close-details-btn').addEventListener('click', () => {
-    document.getElementById('sidebar-right').classList.remove('active');
+    document.getElementById('sidebar-right').classList.add('hidden');
   });
 
   function renderDetailsPanel() {
@@ -953,11 +954,74 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } else {
       const displayName = currentChatInfo.name || 'Contato';
-      body.innerHTML = `
-        <div class="detail-avatar">${displayName.charAt(0).toUpperCase()}</div>
+      const otherMember = currentChatMembers.find(m => m.id !== currentUser.id);
+      const myMember = currentChatMembers.find(m => m.id === currentUser.id);
+      
+      let html = `
+        <div class="detail-avatar" style="${currentChatInfo.photo_url ? `background-image: url(${currentChatInfo.photo_url}); background-size: cover; color: transparent; border: none;` : ''}">${displayName.charAt(0).toUpperCase()}</div>
         <h2>${displayName}</h2>
         <p class="text-secondary">Chat Direto</p>
       `;
+
+      if (otherMember && myMember && myMember.h_level > otherMember.h_level) {
+        html += `<div style="margin-top: 20px; text-align: left; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">`;
+        html += `<h4 style="margin-bottom: 10px; font-size: 14px; color: var(--accent-gold);">Controle de Acesso</h4>`;
+        
+        if (window.currentChatExplicitPermission && (!window.currentChatExplicitPermission.expires_at || new Date(window.currentChatExplicitPermission.expires_at) > new Date())) {
+          let expiresText = window.currentChatExplicitPermission.expires_at ? `Expira em: ${new Date(window.currentChatExplicitPermission.expires_at).toLocaleString('pt-BR')}` : 'Acesso Permanente';
+          html += `
+            <p style="font-size: 12px; color: var(--success); margin-bottom: 10px;">✅ Contato Liberado</p>
+            <p style="font-size: 11px; color: #999; margin-bottom: 15px;">${expiresText}</p>
+            <button id="btn-revoke-contact" class="btn-primary" style="background: var(--danger);">Revogar Acesso</button>
+          `;
+        } else {
+          html += `
+            <p style="font-size: 12px; color: #999; margin-bottom: 15px;">Usuário de hierarquia inferior. Libere o acesso para que ele possa lhe enviar mensagens.</p>
+            <button id="btn-allow-contact" class="btn-primary">Liberar Acesso</button>
+          `;
+        }
+        html += `</div>`;
+      }
+      
+      body.innerHTML = html;
+
+      const btnAllow = document.getElementById('btn-allow-contact');
+      if (btnAllow) {
+        btnAllow.addEventListener('click', async () => {
+          const daysStr = prompt('Por quantos dias deseja liberar o contato? (ex: 1, 7, 30)');
+          if (daysStr === null) return; // Cancelou
+          const days = parseInt(daysStr);
+          if (isNaN(days) || days <= 0) {
+            alert('Por favor, insira um número válido de dias.');
+            return;
+          }
+          try {
+            await fetch('/api/internal-chat/allow-contact', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${token}\` },
+              body: JSON.stringify({ targetId: otherMember.id, days })
+            });
+            openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
+            showNotification('Sucesso', 'Acesso liberado.', activeChatId, 'direct');
+          } catch(e) { alert('Erro ao liberar contato.'); }
+        });
+      }
+
+      const btnRevoke = document.getElementById('btn-revoke-contact');
+      if (btnRevoke) {
+        btnRevoke.addEventListener('click', async () => {
+          if (!confirm('Deseja realmente revogar o acesso deste usuário?')) return;
+          try {
+            await fetch('/api/internal-chat/revoke-contact', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${token}\` },
+              body: JSON.stringify({ targetId: otherMember.id })
+            });
+            openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
+            showNotification('Sucesso', 'Acesso revogado.', activeChatId, 'direct');
+          } catch(e) { alert('Erro ao revogar contato.'); }
+        });
+      }
     }
   }
 

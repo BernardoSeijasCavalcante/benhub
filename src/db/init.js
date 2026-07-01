@@ -151,6 +151,7 @@ function initDb() {
       user_b_id INTEGER NOT NULL,
       granted_by INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME,
       PRIMARY KEY (user_a_id, user_b_id),
       FOREIGN KEY (user_a_id) REFERENCES users (id),
       FOREIGN KEY (user_b_id) REFERENCES users (id),
