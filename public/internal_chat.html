@@ -36,6 +36,22 @@
       border-bottom: 2px solid var(--accent-gold);
     }
 
+    .module-nav a#tab-internal {
+      color: #25D366;
+      font-weight: 600;
+    }
+
+    .module-nav a#tab-internal:hover {
+      background: rgba(37, 211, 102, 0.05);
+      color: #25D366;
+    }
+
+    .module-nav a#tab-internal.active {
+      background: rgba(37, 211, 102, 0.1);
+      color: #25D366;
+      border-bottom: 2px solid #25D366;
+    }
+
     .group-avatar {
       border-radius: 12px !important;
     }
@@ -551,7 +567,9 @@
       <!-- Navegação de Módulos -->
       <nav class="module-nav">
         <a href="sms_dispatch.html" id="tab-sms">Disparo SMS</a>
-        <a href="internal_chat.html" id="tab-internal" class="active">Equipe Interna</a>
+        <a href="internal_chat.html" id="tab-internal" class="active">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align: text-bottom; margin-right: 4px;"><path fill="currentColor" d="M12.01 2.011a10.007 10.007 0 0 0-8.49 15.286l-1.5 4.5 4.672-1.222a10.006 10.006 0 1 0 5.318-18.564z"/></svg>BenZap
+        </a>
       </nav>
 
       <div class="sidebar-header">

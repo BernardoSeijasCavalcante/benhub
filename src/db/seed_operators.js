@@ -47,6 +47,29 @@ async function seedOperators() {
   ];
 
   try {
+    // 1. Apagar os usuários antigos do seed anterior
+    console.log('Verificando e apagando usuários da versão anterior (com números e @benhub.com)...');
+    
+    const oldEmailsToDelete = [];
+    for (let i = 0; i < operators.length; i++) {
+      const name = operators[i];
+      const parts = name.split(' ');
+      const first = parts[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const last = parts.length > 1 ? parts[parts.length - 1].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+      const oldEmail = last ? `${first}.${last}${i}@benhub.com` : `${first}${i}@benhub.com`;
+      oldEmailsToDelete.push(oldEmail);
+    }
+
+    if (oldEmailsToDelete.length > 0) {
+       const placeholders = oldEmailsToDelete.map(() => '?').join(',');
+       try {
+         const [deleteResult] = await db.execute(`DELETE FROM users WHERE email IN (${placeholders})`, oldEmailsToDelete);
+         console.log(`Foram apagados ${deleteResult.affectedRows} usuários antigos.`);
+       } catch (err) {
+         console.error('Erro ao apagar usuários antigos, ignorando...', err.message);
+       }
+    }
+
     // Buscar id da hierarquia "Operador"
     const [hierarchies] = await db.execute('SELECT id FROM hierarchies WHERE name = ?', ['Operador']);
     
@@ -56,29 +79,36 @@ async function seedOperators() {
     }
     const operatorHierarchyId = hierarchies[0].id;
 
+    console.log('Inserindo operadores com o novo formato (@benconsig.com e sem números)...');
+
     for (let i = 0; i < operators.length; i++) {
       const name = operators[i];
-      // Gera um email fictício baseado no nome (primeiro.ultimo@benhub.com)
       const parts = name.split(' ');
       const first = parts[0].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const last = parts.length > 1 ? parts[parts.length - 1].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
-      const email = last ? `${first}.${last}${i}@benhub.com` : `${first}${i}@benhub.com`;
+      
+      // Novo formato: sem número, usando @benconsig.com
+      const email = last ? `${first}.${last}@benconsig.com` : `${first}@benconsig.com`;
 
-      const [exists_rows] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
-      if (exists_rows.length === 0) {
-        await db.execute(`
-          INSERT INTO users (name, email, password_hash, hierarchy_id)
-          VALUES (?, ?, ?, ?)
-        `, [name, email, passwordHash, operatorHierarchyId]);
-        console.log(`Operador inserido: ${name} (${email})`);
-      } else {
-        console.log(`Operador já existente: ${name} (${email})`);
+      try {
+        const [exists_rows] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+        if (exists_rows.length === 0) {
+          await db.execute(`
+            INSERT INTO users (name, email, password_hash, hierarchy_id)
+            VALUES (?, ?, ?, ?)
+          `, [name, email, passwordHash, operatorHierarchyId]);
+          console.log(`Operador inserido: ${name} (${email})`);
+        } else {
+          console.log(`Operador já existente: ${name} (${email})`);
+        }
+      } catch (err) {
+        console.error(`Erro ao inserir o operador ${name}:`, err.message);
       }
     }
 
-    console.log('Todos os operadores foram inseridos com sucesso!');
+    console.log('Todos os operadores foram inseridos/atualizados com sucesso!');
   } catch (error) {
-    console.error('Erro ao inserir operadores:', error);
+    console.error('Erro fatal ao processar operadores:', error);
   } finally {
     process.exit();
   }
