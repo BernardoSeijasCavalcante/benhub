@@ -2,3 +2,4 @@
 /src/db/benhub.db
 .env
 /logs
+public/uploads
