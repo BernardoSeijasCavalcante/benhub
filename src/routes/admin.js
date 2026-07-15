@@ -5,9 +5,10 @@ const db = require('../db/database');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
 // Todas as rotas de admin requerem autenticação e privilégios de admin (can_manage_system = 1)
-router.use(authenticateToken, (req, res, next) => {
+router.use(authenticateToken, async (req, res, next) => {
   if (req.user.hierarchy) {
-    const h = db.prepare('SELECT can_manage_system FROM hierarchies WHERE id = ?').get(req.user.hierarchy);
+    const [h_rows] = await db.execute('SELECT can_manage_system FROM hierarchies WHERE id = ?', [req.user.hierarchy]);
+    const h = h_rows[0];
     if (h && h.can_manage_system) {
       return next();
     }
@@ -23,40 +24,40 @@ router.use(authenticateToken, (req, res, next) => {
 // ==========================================
 
 // Listar hierarquias
-router.get('/hierarchies', (req, res) => {
-  const hierarchies = db.prepare('SELECT * FROM hierarchies ORDER BY level DESC').all();
+router.get('/hierarchies', async (req, res) => {
+  const [hierarchies] = await db.execute('SELECT * FROM hierarchies ORDER BY level DESC');
   res.json(hierarchies);
 });
 
 // Criar hierarquia
-router.post('/hierarchies', (req, res) => {
-  const { name, level, allow_same_level_chat, can_manage_system } = req.body;
+router.post('/hierarchies', async (req, res) => {
+  const { name, level, allow_same_level_chat, can_manage_system, can_view_sms_dashboard } = req.body;
   if (!name || level === undefined) {
     return res.status(400).json({ error: 'Nome e level são obrigatórios.' });
   }
 
   try {
-    const result = db.prepare(`
-      INSERT INTO hierarchies (name, level, allow_same_level_chat, can_manage_system)
-      VALUES (?, ?, ?, ?)
-    `).run(name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0);
-    res.status(201).json({ id: result.lastInsertRowid, name, level, allow_same_level_chat, can_manage_system });
+    const [result] = await db.execute(`
+      INSERT INTO hierarchies (name, level, allow_same_level_chat, can_manage_system, can_view_sms_dashboard)
+      VALUES (?, ?, ?, ?, ?)
+    `, [name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0, can_view_sms_dashboard ? 1 : 0]);
+    res.status(201).json({ id: result.insertId, name, level, allow_same_level_chat, can_manage_system, can_view_sms_dashboard });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao criar hierarquia.' });
   }
 });
 
 // Atualizar hierarquia
-router.put('/hierarchies/:id', (req, res) => {
+router.put('/hierarchies/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, level, allow_same_level_chat, can_manage_system } = req.body;
+  const { name, level, allow_same_level_chat, can_manage_system, can_view_sms_dashboard } = req.body;
 
   try {
-    db.prepare(`
+    await db.execute(`
       UPDATE hierarchies
-      SET name = ?, level = ?, allow_same_level_chat = ?, can_manage_system = ?
+      SET name = ?, level = ?, allow_same_level_chat = ?, can_manage_system = ?, can_view_sms_dashboard = ?
       WHERE id = ?
-    `).run(name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0, id);
+    `, [name, level, allow_same_level_chat ? 1 : 0, can_manage_system ? 1 : 0, can_view_sms_dashboard ? 1 : 0, id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao atualizar hierarquia.' });
@@ -64,16 +65,17 @@ router.put('/hierarchies/:id', (req, res) => {
 });
 
 // Deletar hierarquia
-router.delete('/hierarchies/:id', (req, res) => {
+router.delete('/hierarchies/:id', async (req, res) => {
   const { id } = req.params;
   
-  const inUse = db.prepare('SELECT 1 FROM users WHERE hierarchy_id = ?').get(id);
+  const [inUse_rows] = await db.execute('SELECT 1 FROM users WHERE hierarchy_id = ?', [id]);
+  const inUse = inUse_rows[0];
   if (inUse) {
     return res.status(400).json({ error: 'Não é possível deletar hierarquia em uso por usuários.' });
   }
 
   try {
-    db.prepare('DELETE FROM hierarchies WHERE id = ?').run(id);
+    await db.execute('DELETE FROM hierarchies WHERE id = ?', [id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao deletar hierarquia.' });
@@ -85,24 +87,25 @@ router.delete('/hierarchies/:id', (req, res) => {
 // ==========================================
 
 // Listar usuários
-router.get('/users', (req, res) => {
-  const users = db.prepare(`
-    SELECT u.id, u.name, u.email, u.hierarchy_id, h.name as hierarchy_name, u.contact_number, u.created_at 
+router.get('/users', async (req, res) => {
+  const [users] = await db.execute(`
+    SELECT u.id, u.name, u.email, u.hierarchy_id, h.name as hierarchy_name, u.contact_number, u.is_active, u.created_at 
     FROM users u
     LEFT JOIN hierarchies h ON u.hierarchy_id = h.id
-  `).all();
+  `);
   res.json(users);
 });
 
 // Criar novo usuário
-router.post('/users', (req, res) => {
+router.post('/users', async (req, res) => {
   const { name, email, password, hierarchyId, contactNumber } = req.body;
 
   if (!name || !email || !password || !hierarchyId) {
     return res.status(400).json({ error: 'Nome, email, senha e hierarchyId são obrigatórios.' });
   }
 
-  const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+  const [existingUser_rows] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
+  const existingUser = existingUser_rows[0];
   if (existingUser) {
     return res.status(400).json({ error: 'E-mail já está em uso.' });
   }
@@ -110,20 +113,20 @@ router.post('/users', (req, res) => {
   const passwordHash = bcrypt.hashSync(password, 10);
 
   try {
-    const result = db.prepare(`
+    const [result] = await db.execute(`
       INSERT INTO users (name, email, password_hash, hierarchy_id, contact_number)
       VALUES (?, ?, ?, ?, ?)
-    `).run(name, email, passwordHash, hierarchyId, contactNumber);
+    `, [name, email, passwordHash, hierarchyId, contactNumber]);
 
-    res.status(201).json({ id: result.lastInsertRowid, name, email, hierarchyId, contactNumber });
-    } catch (error) {
+    res.status(201).json({ id: result.insertId, name, email, hierarchyId, contactNumber });
+  } catch (error) {
     console.error('Error in POST /users:', error);
     res.status(500).json({ error: 'Erro ao criar usuário.' });
   }
 });
 
 // Atualizar usuário (senha ou dados)
-router.put('/users/:id', (req, res) => {
+router.put('/users/:id', async (req, res) => {
   const { id } = req.params;
   const { name, email, password, hierarchyId, contactNumber } = req.body;
 
@@ -140,7 +143,7 @@ router.put('/users/:id', (req, res) => {
   params.push(id);
 
   try {
-    db.prepare(query).run(...params);
+    await db.execute(query, params);
     res.json({ success: true });
   } catch (error) {
     console.error('Error in PUT /users/:id:', error);
@@ -148,19 +151,42 @@ router.put('/users/:id', (req, res) => {
   }
 });
 
-// Deletar (desativar) operador - no nosso caso, deletar do banco
-router.delete('/users/:id', (req, res) => {
+// Desativar operador
+router.delete('/users/:id', async (req, res) => {
   const { id } = req.params;
 
   if (parseInt(id) === req.user.id) {
-    return res.status(400).json({ error: 'Você não pode deletar a si mesmo.' });
+    return res.status(400).json({ error: 'Você não pode inativar a si mesmo.' });
   }
 
   try {
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    await db.execute('UPDATE users SET is_active = 0, session_version = session_version + 1 WHERE id = ?', [id]);
+    
+    // Remover de grupos e chats
+    await db.execute('DELETE FROM internal_chat_members WHERE user_id = ?', [id]);
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to('user_' + id).emit('force_logout');
+    }
+
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao deletar usuário.' });
+    console.error('Error inactivating user:', error);
+    res.status(500).json({ error: 'Erro ao inativar usuário.' });
+  }
+});
+
+// Reativar operador
+router.patch('/users/:id/reactivate', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    await db.execute('UPDATE users SET is_active = 1 WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error reactivating user:', error);
+    res.status(500).json({ error: 'Erro ao reativar usuário.' });
   }
 });
 

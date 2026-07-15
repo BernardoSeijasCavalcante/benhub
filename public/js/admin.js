@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // GLOBALS
   window.hierarchiesList = [];
+  window.allUsers = [];
 
   // DOM ELEMENTS - USERS
   const usersTbody = document.getElementById('users-tbody');
@@ -78,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>${h.level}</td>
           <td>${h.allow_same_level_chat ? 'Sim' : 'Não'}</td>
           <td>${h.can_manage_system ? 'Sim' : 'Não'}</td>
+          <td>${h.can_view_sms_dashboard ? 'Sim' : 'Não'}</td>
           <td>
             <button class="btn-action edit-hierarchy" data-hierarchy='${JSON.stringify(h)}'>✏️</button>
             <button class="btn-action delete-hierarchy" data-id="${h.id}">🗑️</button>
@@ -131,8 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const level = parseInt(document.getElementById('form-hierarchy-level').value, 10);
     const allow_same_level_chat = document.getElementById('form-hierarchy-allow-chat').checked;
     const can_manage_system = document.getElementById('form-hierarchy-manage-system').checked;
+    const can_view_sms_dashboard = document.getElementById('form-hierarchy-view-dashboard').checked;
 
-    const payload = { name, level, allow_same_level_chat, can_manage_system };
+    const payload = { name, level, allow_same_level_chat, can_manage_system, can_view_sms_dashboard };
     const url = id ? `/api/admin/hierarchies/${id}` : '/api/admin/hierarchies';
     const method = id ? 'PUT' : 'POST';
 
@@ -165,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('form-hierarchy-level').value = hierarchy ? hierarchy.level : '';
     document.getElementById('form-hierarchy-allow-chat').checked = hierarchy ? hierarchy.allow_same_level_chat : false;
     document.getElementById('form-hierarchy-manage-system').checked = hierarchy ? hierarchy.can_manage_system : false;
+    document.getElementById('form-hierarchy-view-dashboard').checked = hierarchy ? hierarchy.can_view_sms_dashboard : false;
     hierarchyModal.classList.add('active');
   }
 
@@ -176,20 +180,42 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/admin/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const users = await res.json();
-      
-      usersTbody.innerHTML = '';
-      users.forEach(u => {
+      window.allUsers = await res.json();
+      renderUsers();
+    } catch (err) {
+      console.error('Erro ao carregar usuários', err);
+    }
+  }
+
+  const showInactiveCheckbox = document.getElementById('show-inactive-users');
+  if (showInactiveCheckbox) {
+    showInactiveCheckbox.addEventListener('change', renderUsers);
+  }
+
+  function renderUsers() {
+    const showInactive = showInactiveCheckbox ? showInactiveCheckbox.checked : false;
+    const filteredUsers = window.allUsers.filter(u => showInactive || u.is_active);
+
+    usersTbody.innerHTML = '';
+    filteredUsers.forEach(u => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${u.name}</td>
           <td>${u.email}</td>
           <td>${u.contact_number || '-'}</td>
           <td>${u.hierarchy_name || '-'}</td>
+          <td>
+            <span style="color: ${u.is_active ? '#4ade80' : '#f87171'}; font-weight: 500;">
+              ${u.is_active ? 'Ativo' : 'Inativo'}
+            </span>
+          </td>
           <td>${new Date(u.created_at).toLocaleDateString()}</td>
           <td>
-            <button class="btn-action edit-user" data-user='${JSON.stringify(u)}'>✏️</button>
-            <button class="btn-action delete-user" data-id="${u.id}">🗑️</button>
+            <button class="btn-action edit-user" data-user='${JSON.stringify(u)}' title="Editar">✏️</button>
+            ${u.is_active ? 
+              `<button class="btn-action delete-user" data-id="${u.id}" title="Inativar">🛑</button>` : 
+              `<button class="btn-action reactivate-user" data-id="${u.id}" title="Reativar">✅</button>`
+            }
           </td>
         `;
         usersTbody.appendChild(tr);
@@ -205,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.delete-user').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           const id = e.currentTarget.getAttribute('data-id');
-          if (confirm('Tem certeza que deseja deletar este usuário?')) {
+          if (confirm('Tem certeza que deseja inativar este usuário? Ele perderá acesso ao sistema.')) {
             await fetch(`/api/admin/users/${id}`, {
               method: 'DELETE',
               headers: { 'Authorization': `Bearer ${token}` }
@@ -215,10 +241,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
 
-    } catch (err) {
-      console.error('Erro ao carregar usuários', err);
+      document.querySelectorAll('.reactivate-user').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = e.currentTarget.getAttribute('data-id');
+          if (confirm('Tem certeza que deseja reativar este usuário?')) {
+            await fetch(`/api/admin/users/${id}/reactivate`, {
+              method: 'PATCH',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            loadUsers();
+          }
+        });
+      });
+
     }
-  }
 
   document.getElementById('add-user-btn').addEventListener('click', () => {
     openModal();

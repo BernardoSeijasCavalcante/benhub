@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db/database');
 const logger = require('../utils/logger');
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const io = req.app.get('io');
   const rawBody = req.body;
   const data = rawBody.payload || rawBody;
@@ -27,7 +27,7 @@ router.post('/', (req, res) => {
         
         if (!isNaN(messageId)) {
           // Atualiza status diretamente pelo ID da mensagem
-          db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(newStatus, messageId);
+          await db.execute('UPDATE messages SET status = ? WHERE id = ?', [newStatus, messageId]);
           
           // Notificar via Socket.IO
           io.emit('message_status_update', { messageId, status: newStatus });

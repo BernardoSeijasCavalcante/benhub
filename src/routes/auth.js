@@ -18,17 +18,22 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ error: 'Email e senha são obrigatórios.' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const [user_rows] = await db.execute('SELECT * FROM users WHERE email = ?', [email]);
+  const user = user_rows[0];
 
   if (!user) {
     return res.status(401).json({ error: 'Credenciais inválidas.' });
+  }
+
+  if (user.is_active === 0) {
+    return res.status(403).json({ error: 'Usuário inativo. Acesso negado.' });
   }
 
   const validPassword = bcrypt.compareSync(password, user.password_hash);
@@ -37,11 +42,14 @@ router.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Credenciais inválidas.' });
   }
 
-  const hierarchy = db.prepare('SELECT can_manage_system FROM hierarchies WHERE id = ?').get(user.hierarchy_id);
+  const [hierarchy_rows] = await db.execute('SELECT can_manage_system, can_view_sms_dashboard FROM hierarchies WHERE id = ?', [user.hierarchy_id]);
+  const hierarchy = hierarchy_rows[0];
   const computedRole = (hierarchy && hierarchy.can_manage_system === 1) ? 'admin' : 'operator';
+  const canViewDashboard = (hierarchy && hierarchy.can_view_sms_dashboard === 1) ? true : false;
 
-  db.prepare('UPDATE users SET session_version = COALESCE(session_version, 0) + 1 WHERE id = ?').run(user.id);
-  const updatedUser = db.prepare('SELECT session_version FROM users WHERE id = ?').get(user.id);
+  await db.execute('UPDATE users SET session_version = COALESCE(session_version, 0) + 1 WHERE id = ?', [user.id]);
+  const [updatedUser_rows] = await db.execute('SELECT session_version FROM users WHERE id = ?', [user.id]);
+  const updatedUser = updatedUser_rows[0];
   const newSessionVersion = updatedUser.session_version;
 
   const io = req.app.get('io');
@@ -50,7 +58,7 @@ router.post('/login', (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user.id, email: user.email, role: computedRole, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url, session_version: newSessionVersion },
+    { id: user.id, email: user.email, role: computedRole, hierarchy: user.hierarchy_id, name: user.name, contact_number: user.contact_number, photo_url: user.photo_url, session_version: newSessionVersion, can_view_sms_dashboard: canViewDashboard },
     process.env.JWT_SECRET || 'super_secret_jwt_key_here',
     { expiresIn: '24h' }
   );
@@ -68,16 +76,16 @@ router.post('/login', (req, res) => {
   });
 });
 
-router.post('/upload-photo', authenticateToken, upload.single('photo'), (req, res) => {
+router.post('/upload-photo', authenticateToken, upload.single('photo'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
   }
   const photoUrl = '/uploads/' + req.file.filename;
-  db.prepare('UPDATE users SET photo_url = ? WHERE id = ?').run(photoUrl, req.user.id);
+  await db.execute('UPDATE users SET photo_url = ? WHERE id = ?', [photoUrl, req.user.id]);
   res.json({ photo_url: photoUrl });
 });
 
-router.get('/me', authenticateToken, (req, res) => {
+router.get('/me', authenticateToken, async (req, res) => {
   res.json({ user: req.user });
 });
 

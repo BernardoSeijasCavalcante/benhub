@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BenHub - Dashboard de SMS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Reusing global layout and components if possible, otherwise keeping it independent but consistent -->
+  <link rel="stylesheet" href="css/internal_chat.css">
+  <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar glass-panel">
+      <div class="brand">
+        <span class="logo-text">BenHub</span>
+        <div class="logo-dot"></div>
+      </div>
+      <nav class="nav-menu">
+        <a href="sms_dispatch.html" class="nav-item">💬 Disparo SMS</a>
+        <a href="internal_chat.html" class="nav-item">👥 Chat Interno</a>
+        <a href="dashboard.html" class="nav-item active">📊 Dashboard SMS</a>
+        <a href="admin.html" class="nav-item" id="nav-admin" style="display: none;">⚙️ Administração</a>
+      </nav>
+      <div class="user-profile">
+        <img src="https://ui-avatars.com/api/?name=User&background=0D8ABC&color=fff" alt="User Avatar" class="avatar" id="current-user-avatar">
+        <div class="user-info">
+          <div class="user-name" id="current-user-name">Carregando...</div>
+          <div class="user-status">Online</div>
+        </div>
+      </div>
+      <button id="logout-btn" class="btn-secondary logout-btn">Sair</button>
+    </aside>
+
+    <main class="main-content">
+      <header class="top-header glass-panel">
+        <div class="header-left">
+          <h1>Dashboard de Disparos</h1>
+          <p class="subtitle">Desempenho de envios de SMS da equipe</p>
+        </div>
+        
+        <div class="date-filters">
+          <div class="filter-group">
+            <label>De:</label>
+            <input type="date" id="filter-start-date">
+          </div>
+          <div class="filter-group">
+            <label>Até:</label>
+            <input type="date" id="filter-end-date">
+          </div>
+          <button id="apply-filters-btn" class="btn-primary">Filtrar</button>
+        </div>
+      </header>
+
+      <div class="dashboard-content">
+        <div class="group-selector glass-panel">
+          <h3>Selecione um Grupo</h3>
+          <select id="group-select">
+            <option value="">Carregando grupos...</option>
+          </select>
+        </div>
+
+        <div id="dashboard-results" class="dashboard-results">
+          <!-- O conteúdo será injetado pelo JS -->
+          <div class="empty-state">
+            <div class="icon">📊</div>
+            <p>Selecione um grupo para visualizar os dados ou verifique os filtros de data.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

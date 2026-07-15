@@ -551,7 +551,7 @@
       <!-- Navegação de Módulos -->
       <nav class="module-nav">
         <a href="sms_dispatch.html" id="tab-sms">Disparo SMS</a>
-        <a href="internal_chat.html" class="active" id="tab-internal">Equipe Interna</a>
+        <a href="internal_chat.html" id="tab-internal" class="active">Equipe Interna</a>
       </nav>
 
       <div class="sidebar-header">
@@ -622,7 +622,11 @@
           <!-- Mensagens renderizadas aqui -->
         </div>
 
-        <footer class="chat-footer">
+        <div id="inactive-chat-banner" style="display: none; background: rgba(255, 0, 0, 0.2); color: #ff6b6b; padding: 10px; text-align: center; border-top: 1px solid rgba(255, 0, 0, 0.3);">
+          Este grupo foi inativado. O envio de mensagens está desabilitado.
+        </div>
+
+        <footer class="chat-footer" id="chat-footer">
           <form id="send-message-form" style="display: flex; width: 100%;">
             <div class="actions">
               <input type="file" id="file-input" style="display: none;"

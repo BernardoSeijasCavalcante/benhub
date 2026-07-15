@@ -60,6 +60,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (imageViewerModal) {
+    imageViewerModal.addEventListener('click', (e) => {
+      if (e.target.id === 'modal-image-viewer' || e.target.classList.contains('modal-content')) {
+        imageViewerModal.classList.remove('active');
+      }
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && imageViewerModal && imageViewerModal.classList.contains('active')) {
+      imageViewerModal.classList.remove('active');
+    }
+  });
+
   document.addEventListener('click', (e) => {
     const avatarTarget = e.target.closest('.avatar, .detail-avatar');
     if (avatarTarget && avatarTarget.id !== 'operator-avatar') {
@@ -80,7 +94,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Socket.IO
   const socket = io();
-  socket.emit('authenticate', token);
+  socket.on('connect', () => {
+    socket.emit('authenticate', token);
+  });
 
   socket.on('force_logout', () => {
     alert('Você fez login em outro dispositivo. Esta sessão foi encerrada.');
@@ -209,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="contact-info" style="flex:1; display:flex; align-items:center;">
           <div style="flex:1; overflow:hidden;">
             <div class="contact-header" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-              <span class="contact-name">${chat.name || 'Chat sem nome'}</span>
+              <span class="contact-name">${(chat.name || 'Chat sem nome') + (chat.is_active === 0 ? ' (Inativo)' : '')}</span>
               ${pinIcon}${lockIcon}
             </div>
             <span class="contact-last-msg">${isGroup ? 'Grupo' : 'Contato'}</span>
@@ -218,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="contact-actions">
           <button class="btn-pin" title="${chat.is_pinned ? 'Desfixar' : 'Fixar'}">📌</button>
-          <button class="btn-remove" title="${isGroup ? 'Sair do Grupo' : 'Remover'}">🗑️</button>
+          ${!isGroup ? '<button class="btn-remove" title="Remover">🗑️</button>' : ''}
         </div>
       `;
 
@@ -249,17 +265,18 @@ document.addEventListener('DOMContentLoaded', () => {
         loadChats();
       });
 
-      // Botão Remover
-      el.querySelector('.btn-remove').addEventListener('click', async () => {
-        if (!confirm(`Deseja realmente ${isGroup ? 'sair deste grupo' : 'remover este contato'}?`)) return;
-        const url = isGroup 
-          ? `/api/internal-chat/${chat.id}/leave`
-          : `/api/internal-chat/contacts/${chat.other_user_id}`;
-        
-        await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-        if (activeChatId === chat.id) closeChat();
-        loadChats();
-      });
+      // Botão Remover (Somente para contatos diretos)
+      const btnRemove = el.querySelector('.btn-remove');
+      if (btnRemove) {
+        btnRemove.addEventListener('click', async () => {
+          if (!confirm('Deseja realmente remover este contato?')) return;
+          const url = `/api/internal-chat/contacts/${chat.other_user_id}`;
+          
+          await fetch(url, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+          if (activeChatId === chat.id) closeChat();
+          loadChats();
+        });
+      }
 
       listEl.appendChild(el);
     });
@@ -446,6 +463,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderContactsList(); // Atualizar item ativo
     document.getElementById('chat-messages').innerHTML = '<div class="loading">Carregando mensagens...</div>';
+    
+    // Banner e envio de inativos
+    const banner = document.getElementById('inactive-chat-banner');
+    const footer = document.getElementById('chat-footer');
+    if (localChat && localChat.is_active === 0) {
+      if (banner) banner.style.display = 'block';
+      if (footer) footer.style.display = 'none';
+    } else {
+      if (banner) banner.style.display = 'none';
+      if (footer) footer.style.display = 'flex';
+    }
 
     try {
       const res = await fetch(`/api/internal-chat/${chatId}/messages`, {
@@ -917,8 +945,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentChatInfo) return;
 
     if (currentChatInfo.type === 'group') {
+      let avatarStyle = currentChatInfo.photo_url 
+        ? `background-image: url(${currentChatInfo.photo_url}); background-size: cover; color: transparent; border: none; cursor: pointer;`
+        : `background-color: ${currentChatInfo.color || '#333'}; cursor: pointer;`;
+
+      let adminEditHtml = isAdminOfCurrentGroup ? `
+        <div class="edit-group-photo-btn" style="position: absolute; bottom: 0; right: -5px; background: var(--primary-color); border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.5);" title="Alterar foto do grupo">
+          <span style="font-size: 12px; color: white;">✏️</span>
+        </div>
+        <input type="file" id="group-photo-input" accept="image/*" style="display: none;">
+      ` : '';
+
       let html = `
-        <div class="detail-avatar group-avatar" style="background-color: ${currentChatInfo.color || '#333'}">${(currentChatInfo.name || '?').charAt(0).toUpperCase()}</div>
+        <div style="position: relative; display: inline-block; margin-bottom: 10px;">
+          <div class="detail-avatar group-avatar" id="detail-group-avatar" style="${avatarStyle}">${(currentChatInfo.name || '?').charAt(0).toUpperCase()}</div>
+          ${adminEditHtml}
+        </div>
         <h2>${currentChatInfo.name}</h2>
         <p class="text-secondary">${currentChatInfo.description || 'Sem descrição'}</p>
         <h4 style="margin-top:20px;">Membros (${currentChatMembers.length})</h4>
@@ -926,21 +968,109 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       currentChatMembers.forEach(m => {
         let badge = m.role === 'admin' ? '<span style="font-size:10px; background:var(--primary-color); padding:2px 5px; border-radius:4px; margin-left:5px;">Admin</span>' : '';
+        let removeBtn = (isAdminOfCurrentGroup && m.id !== currentUser.id) ? `<button class="btn-remove-member btn-icon" data-id="${m.id}" title="Remover Membro" style="color:var(--danger); font-size: 14px;">🗑️</button>` : '';
         html += `
           <div class="member-item">
             <div class="member-info">
               <div class="avatar" style="width:24px; height:24px; font-size:12px;">${m.name.charAt(0).toUpperCase()}</div>
               <span>${m.name} ${badge}</span>
             </div>
+            ${removeBtn}
           </div>
         `;
       });
       html += `</div>`;
+      
+      // Controles do Administrador do Sistema (Inativar/Reativar)
+      if (currentUser.role === 'admin') {
+        if (currentChatInfo.is_active === 0) {
+          html += `<button id="btn-reactivate-group" class="btn-primary" style="margin-top: 15px; background: var(--success); width: 100%;">Reativar Grupo</button>`;
+        } else {
+          html += `<button id="btn-inactivate-group" class="btn-primary" style="margin-top: 15px; background: var(--danger); width: 100%;">Inativar Grupo</button>`;
+        }
+      }
       // Adicionar Membro: deve ser admin do grupo E admin do sistema (hierarquia mais alta)
       if (isAdminOfCurrentGroup && currentUser.role === 'admin') {
         html += `<button id="btn-open-add-member" class="btn-primary" style="margin-top: 15px;">➕ Adicionar Membro</button>`;
       }
       body.innerHTML = html;
+
+      const groupAvatar = document.getElementById('detail-group-avatar');
+      if (groupAvatar && currentChatInfo.photo_url) {
+        groupAvatar.addEventListener('click', () => {
+          document.getElementById('expanded-image').src = currentChatInfo.photo_url;
+          document.getElementById('modal-image-viewer').classList.add('active');
+        });
+      }
+
+      const editGroupBtn = body.querySelector('.edit-group-photo-btn');
+      const groupPhotoInput = document.getElementById('group-photo-input');
+      if (editGroupBtn && groupPhotoInput) {
+        editGroupBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          groupPhotoInput.click();
+        });
+        groupPhotoInput.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const formData = new FormData();
+          formData.append('photo', file);
+          try {
+            const response = await fetch(`/api/internal-chat/${activeChatId}/group/photo`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: formData
+            });
+            if (response.ok) {
+              const data = await response.json();
+              currentChatInfo.photo_url = data.photo_url;
+              renderDetailsPanel(); // re-render details
+              openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, data.photo_url); // re-render header and messages
+              loadChats(); // refresh sidebar list
+            }
+          } catch(err) {
+            console.error('Erro ao atualizar foto do grupo', err);
+          }
+        });
+      }
+
+      // Inativar/Reativar Eventos
+      const btnInactivate = document.getElementById('btn-inactivate-group');
+      if (btnInactivate) {
+        btnInactivate.addEventListener('click', async () => {
+          if (!confirm('Deseja realmente inativar este grupo? Ninguém poderá enviar mensagens.')) return;
+          try {
+            await fetch(`/api/internal-chat/${activeChatId}/inactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+            loadChats();
+            closeChat();
+          } catch (e) { alert('Erro ao inativar grupo.'); }
+        });
+      }
+
+      const btnReactivate = document.getElementById('btn-reactivate-group');
+      if (btnReactivate) {
+        btnReactivate.addEventListener('click', async () => {
+          if (!confirm('Deseja reativar este grupo?')) return;
+          try {
+            await fetch(`/api/internal-chat/${activeChatId}/reactivate`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
+            loadChats();
+            closeChat();
+          } catch (e) { alert('Erro ao reativar grupo.'); }
+        });
+      }
+
+      // Remover Membro
+      const removeButtons = document.querySelectorAll('.btn-remove-member');
+      removeButtons.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const targetId = e.currentTarget.getAttribute('data-id');
+          if (!confirm('Deseja remover este membro do grupo?')) return;
+          try {
+            await fetch(`/api/internal-chat/${activeChatId}/members/${targetId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+            openChat(activeChatId, currentChatInfo.name, 'group', currentChatInfo.color, currentChatInfo.photo_url);
+          } catch (err) { alert('Erro ao remover membro.'); }
+        });
+      });
 
       // Modal Add Membro
       const btnOpenAddMember = document.getElementById('btn-open-add-member');
@@ -957,8 +1087,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const otherMember = currentChatMembers.find(m => m.id !== currentUser.id);
       const myMember = currentChatMembers.find(m => m.id === currentUser.id);
       
+      let avatarStyle = currentChatInfo.photo_url ? `background-image: url(${currentChatInfo.photo_url}); background-size: cover; color: transparent; border: none; cursor: pointer;` : `cursor: pointer;`;
       let html = `
-        <div class="detail-avatar" style="${currentChatInfo.photo_url ? `background-image: url(${currentChatInfo.photo_url}); background-size: cover; color: transparent; border: none;` : ''}">${displayName.charAt(0).toUpperCase()}</div>
+        <div class="detail-avatar" id="detail-direct-avatar" style="${avatarStyle}">${displayName.charAt(0).toUpperCase()}</div>
         <h2>${displayName}</h2>
         <p class="text-secondary">Chat Direto</p>
       `;
@@ -985,6 +1116,14 @@ document.addEventListener('DOMContentLoaded', () => {
       
       body.innerHTML = html;
 
+      const directAvatar = document.getElementById('detail-direct-avatar');
+      if (directAvatar && currentChatInfo.photo_url) {
+        directAvatar.addEventListener('click', () => {
+          document.getElementById('expanded-image').src = currentChatInfo.photo_url;
+          document.getElementById('modal-image-viewer').classList.add('active');
+        });
+      }
+
       const btnAllow = document.getElementById('btn-allow-contact');
       if (btnAllow) {
         btnAllow.addEventListener('click', async () => {
@@ -998,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             await fetch('/api/internal-chat/allow-contact', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${token}\` },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ targetId: otherMember.id, days })
             });
             openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
@@ -1014,7 +1153,7 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             await fetch('/api/internal-chat/revoke-contact', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${token}\` },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
               body: JSON.stringify({ targetId: otherMember.id })
             });
             openChat(activeChatId, currentChatInfo.name, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);

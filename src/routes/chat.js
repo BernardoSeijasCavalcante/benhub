@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 router.use(authenticateToken);
 
 // Lista os últimos disparos realizados (Log)
-router.get('/recent', (req, res) => {
+router.get('/recent', async (req, res) => {
   const { role, id: userId } = req.user;
   const filterOperatorId = req.query.operator_id;
 
@@ -30,7 +30,7 @@ router.get('/recent', (req, res) => {
 
   query += ` ORDER BY m.timestamp DESC LIMIT 50`;
 
-  const messages = db.prepare(query).all(...params);
+  const [messages] = await db.execute(query, [...params]);
   res.json(messages);
 });
 
@@ -56,11 +56,12 @@ router.post('/send', async (req, res) => {
     .join(' ');
 
   if (req.user.role === 'operator') {
-    const existingMessage = db.prepare(`
+    const [existingMessage_rows] = await db.execute(`
       SELECT status FROM messages 
       WHERE customer_phone = ? AND operator_id = ? 
       ORDER BY timestamp DESC LIMIT 1
-    `).get(phone, req.user.id);
+    `, [phone, req.user.id]);
+    const existingMessage = existingMessage_rows[0];
 
     if (existingMessage) {
       if (['sent', 'delivered', 'pending'].includes(existingMessage.status)) {
@@ -94,22 +95,23 @@ router.post('/send', async (req, res) => {
   }
 
   // Garantir que o cliente existe
-  const existingCustomer = db.prepare('SELECT * FROM customers WHERE phone_number = ?').get(phone);
+  const [existingCustomer_rows] = await db.execute('SELECT * FROM customers WHERE phone_number = ?', [phone]);
+  const existingCustomer = existingCustomer_rows[0];
   if (!existingCustomer) {
-    db.prepare('INSERT INTO customers (phone_number, name) VALUES (?, ?)').run(phone, clientName);
+    await db.execute('INSERT INTO customers (phone_number, name) VALUES (?, ?)', [phone, clientName]);
   } else {
     // Atualiza nome se necessário
-    db.prepare('UPDATE customers SET name = ? WHERE phone_number = ?').run(clientName, phone);
+    await db.execute('UPDATE customers SET name = ? WHERE phone_number = ?', [clientName, phone]);
   }
 
   try {
     // 1. Salvar no banco como pending
-    const result = db.prepare(`
+    const [result] = await db.execute(`
       INSERT INTO messages (customer_phone, sender_type, operator_id, content, status)
       VALUES (?, 'operator', ?, ?, 'pending')
-    `).run(phone, req.user.id, messageContent);
+    `, [phone, req.user.id, messageContent]);
     
-    const messageId = result.lastInsertRowid;
+    const messageId = result.insertId;
 
     // 2. Enviar para a Kolmeya API
     const kolmeyaResponse = await kolmeyaService.sendSMS(phone, messageContent, messageId);
@@ -132,8 +134,7 @@ router.post('/send', async (req, res) => {
     }
 
     if (kolmeyaId || finalStatus === 'failed') {
-      db.prepare('UPDATE messages SET kolmeya_id = ?, status = ? WHERE id = ?')
-        .run(kolmeyaId, finalStatus, messageId);
+      await db.execute('UPDATE messages SET kolmeya_id = ?, status = ? WHERE id = ?', [kolmeyaId, finalStatus, messageId]);
     }
     
     if (finalStatus === 'failed') {

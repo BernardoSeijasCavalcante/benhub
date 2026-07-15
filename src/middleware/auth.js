@@ -7,13 +7,14 @@ function authenticateToken(req, res, next) {
 
   if (token == null) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_here', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_here', async (err, user) => {
     if (err) return res.sendStatus(403);
     
-    // Validar session_version
-    const dbUser = db.prepare('SELECT session_version FROM users WHERE id = ?').get(user.id);
-    if (!dbUser || dbUser.session_version !== user.session_version) {
-      return res.status(401).json({ error: 'Sessão expirada. Faça login novamente.' });
+    // Validar session_version e is_active
+    const [dbUser_rows] = await db.execute('SELECT session_version, is_active FROM users WHERE id = ?', [user.id]);
+  const dbUser = dbUser_rows[0];
+    if (!dbUser || dbUser.is_active === 0 || dbUser.session_version !== user.session_version) {
+      return res.status(401).json({ error: 'Sessão expirada ou usuário inativo. Faça login novamente.' });
     }
 
     req.user = user;

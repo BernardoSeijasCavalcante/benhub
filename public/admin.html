@@ -16,6 +16,7 @@
       </div>
       <ul class="nav-links">
         <li><a href="/sms_dispatch.html">Disparo SMS</a></li>
+        <li><a href="/dashboard.html" id="nav-dashboard" style="display: none;">Dashboard SMS</a></li>
         <li class="active"><a href="/admin.html">Gestão de Equipe</a></li>
       </ul>
       <div class="user-profile">
@@ -41,7 +42,12 @@
       <section id="users-section" class="tab-content active">
         <div class="section-header">
           <h2>Lista de Operadores</h2>
-          <button id="add-user-btn" class="btn-primary">+ Novo Operador</button>
+          <div style="display: flex; gap: 15px; align-items: center;">
+            <label style="color: var(--text-color, #fff); display: flex; align-items: center; gap: 5px; font-size: 0.9rem;">
+              <input type="checkbox" id="show-inactive-users"> Mostrar Inativos
+            </label>
+            <button id="add-user-btn" class="btn-primary">+ Novo Operador</button>
+          </div>
         </div>
         <div class="table-container glass-panel">
           <table class="users-table">
@@ -51,6 +57,7 @@
                 <th>E-mail</th>
                 <th>Contato (WhatsApp)</th>
                 <th>Hierarquia</th>
+                <th>Status</th>
                 <th>Data de Criação</th>
                 <th>Ações</th>
               </tr>
@@ -75,6 +82,7 @@
                 <th>Nível</th>
                 <th>Chat Mesmo Nível</th>
                 <th>Gerenciar Sistema</th>
+                <th>Dashboard SMS</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -148,6 +156,12 @@
           <label>
             <input type="checkbox" id="form-hierarchy-manage-system">
             Permitir gerenciar sistema (Acesso ao painel Admin)
+          </label>
+        </div>
+        <div class="input-group checkbox-group">
+          <label>
+            <input type="checkbox" id="form-hierarchy-view-dashboard">
+            Visualizar Dashboard de SMS
           </label>
         </div>
         <div class="modal-actions">

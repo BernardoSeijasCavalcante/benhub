@@ -39,6 +39,7 @@ const adminRoutes = require('./routes/admin');
 const chatRoutes = require('./routes/chat');
 const kolmeyaRoutes = require('./routes/kolmeya');
 const internalChatRoutes = require('./routes/internal_chat');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Usar rotas
 app.use('/api/auth', authRoutes);
@@ -46,6 +47,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/webhooks/kolmeya', kolmeyaRoutes);
 app.use('/api/internal-chat', internalChatRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Tratamento global de erros nas rotas
 app.use(errorHandler);
@@ -56,11 +58,12 @@ const jwt = require('jsonwebtoken');
 io.on('connection', (socket) => {
   logger.info(`Um usuário conectou: ${socket.id}`);
 
-  socket.on('authenticate', (token) => {
+  socket.on('authenticate', async (token) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_jwt_key_here');
       
-      const dbUser = db.prepare('SELECT session_version FROM users WHERE id = ?').get(decoded.id);
+      const [rows] = await db.execute('SELECT session_version FROM users WHERE id = ?', [decoded.id]);
+      const dbUser = rows[0];
       if (!dbUser || dbUser.session_version !== decoded.session_version) {
         socket.emit('force_logout');
         socket.disconnect(true);
@@ -88,23 +91,19 @@ server.listen(PORT, () => {
   logger.info(`Servidor rodando na porta ${PORT}`);
   
   // Rotina de timeout: Expira SMS pendentes a mais de 4 minutos
-  setInterval(() => {
+  setInterval(async () => {
     try {
-      const expiredMessages = db.prepare(`
+      const [expiredMessages] = await db.query(`
         SELECT id FROM messages 
-        WHERE status = 'pending' AND timestamp < datetime('now', '-4 minutes')
-      `).all();
+        WHERE status = 'pending' AND timestamp < DATE_SUB(NOW(), INTERVAL 4 MINUTE)
+      `);
 
       if (expiredMessages.length > 0) {
-        const updateStmt = db.prepare(`UPDATE messages SET status = 'failed' WHERE id = ?`);
-        
-        db.transaction((messages) => {
-          for (const msg of messages) {
-            updateStmt.run(msg.id);
-            // Emite evento para os clientes conectados para que atualizem a interface para "Erro"
-            io.emit('message_status_update', { messageId: msg.id, status: 'failed' });
-          }
-        })(expiredMessages);
+        for (const msg of expiredMessages) {
+          await db.execute(`UPDATE messages SET status = 'failed' WHERE id = ?`, [msg.id]);
+          // Emite evento para os clientes conectados para que atualizem a interface para "Erro"
+          io.emit('message_status_update', { messageId: msg.id, status: 'failed' });
+        }
         
         logger.info(`Timeout rotina: ${expiredMessages.length} mensagens expiradas atualizadas para 'failed'.`);
       }

@@ -88,14 +88,42 @@
     .status-sent { background: #3b82f6; color: #fff; }
     .status-delivered { background: #10b981; color: #fff; }
     .status-failed { background: #ef4444; color: #fff; }
+    
+    /* Inner tabs */
+    .inner-tabs {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+    }
+    .inner-tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .inner-tab-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+    .inner-tab-btn.active {
+      background: rgba(0, 210, 255, 0.15);
+      color: var(--primary-color);
+    }
   </style>
+  <link rel="stylesheet" href="css/dashboard.css">
 </head>
 <body>
   <div class="app-container">
     
     <!-- Painel Lateral Esquerdo: Navegação -->
     <aside class="sidebar-left glass-panel">
-      <!-- Navegação de Módulos -->
       <nav class="module-nav" style="display: flex; background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
         <a href="sms_dispatch.html" class="active" id="tab-sms" style="flex: 1; text-align: center; padding: 12px; color: var(--primary-color); background: rgba(0, 210, 255, 0.2); border-bottom: 2px solid var(--primary-color); text-decoration: none; font-weight: 500;">Disparo SMS</a>
         <a href="internal_chat.html" id="tab-internal" style="flex: 1; text-align: center; padding: 12px; color: var(--text-secondary); text-decoration: none; font-weight: 500;">Equipe Interna</a>
@@ -123,9 +151,14 @@
     </aside>
 
     <!-- Painel Central: Formulário e Log -->
-    <main class="chat-area glass-panel" style="flex: 1; padding: 0;">
-      <div class="dispatch-container">
-        
+    <main class="chat-area glass-panel" style="flex: 1; padding: 24px; overflow-y: auto;">
+      
+      <div id="inner-tabs-container" class="inner-tabs" style="display: none;">
+        <button class="inner-tab-btn active" id="btn-view-form">Enviar SMS</button>
+        <button class="inner-tab-btn" id="btn-view-dashboard">Dashboard de Equipe</button>
+      </div>
+
+      <div id="view-form" class="dispatch-container" style="padding: 0;">
         <form class="dispatch-form" id="dispatch-form">
           <h2>Disparar SMS</h2>
           <p style="color: var(--text-secondary); font-size: 14px;">Envie uma mensagem de contato comercial rapidamente. O template é escolhido automaticamente.</p>
@@ -168,8 +201,41 @@
             </tbody>
           </table>
         </div>
-
       </div>
+
+      <div id="view-dashboard" class="dashboard-content" style="display: none; padding: 0;">
+        <header class="top-header glass-panel" style="margin: 0 0 20px 0;">
+          <div class="header-left">
+            <h2>Desempenho da Equipe</h2>
+          </div>
+          <div class="date-filters">
+            <div class="filter-group">
+              <label>De:</label>
+              <input type="date" id="filter-start-date">
+            </div>
+            <div class="filter-group">
+              <label>Até:</label>
+              <input type="date" id="filter-end-date">
+            </div>
+            <button id="apply-filters-btn" class="btn-primary">Filtrar</button>
+          </div>
+        </header>
+
+        <div class="group-selector glass-panel">
+          <h3>Selecione um Grupo</h3>
+          <select id="group-select">
+            <option value="">Carregando grupos...</option>
+          </select>
+        </div>
+
+        <div id="dashboard-results" class="dashboard-results">
+          <div class="empty-state">
+            <div class="icon">📊</div>
+            <p>Selecione um grupo para visualizar os dados ou verifique os filtros de data.</p>
+          </div>
+        </div>
+      </div>
+
     </main>
 
   </div>
