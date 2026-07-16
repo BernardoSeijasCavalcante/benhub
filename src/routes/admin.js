@@ -98,7 +98,17 @@ router.get('/users', async (req, res) => {
 
 // Criar novo usuário
 router.post('/users', async (req, res) => {
-  const { name, email, password, hierarchyId, contactNumber } = req.body;
+  const { name, email, password, hierarchyId } = req.body;
+  let { contactNumber } = req.body;
+
+  if (contactNumber) {
+    contactNumber = contactNumber.replace(/\D/g, '');
+    if (!contactNumber.startsWith('55')) {
+      contactNumber = '55' + contactNumber;
+    }
+  } else {
+    contactNumber = null;
+  }
 
   if (!name || !email || !password || !hierarchyId) {
     return res.status(400).json({ error: 'Nome, email, senha e hierarchyId são obrigatórios.' });
@@ -128,7 +138,17 @@ router.post('/users', async (req, res) => {
 // Atualizar usuário (senha ou dados)
 router.put('/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, email, password, hierarchyId, contactNumber } = req.body;
+  const { name, email, password, hierarchyId } = req.body;
+  let { contactNumber } = req.body;
+
+  if (contactNumber) {
+    contactNumber = contactNumber.replace(/\D/g, '');
+    if (!contactNumber.startsWith('55')) {
+      contactNumber = '55' + contactNumber;
+    }
+  } else {
+    contactNumber = null;
+  }
 
   let query = 'UPDATE users SET name = ?, email = ?, hierarchy_id = ?, contact_number = ?';
   const params = [name, email, hierarchyId, contactNumber];

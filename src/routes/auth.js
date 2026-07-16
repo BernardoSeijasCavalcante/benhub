@@ -90,9 +90,14 @@ router.get('/me', authenticateToken, async (req, res) => {
 });
 
 router.post('/update-phone', authenticateToken, async (req, res) => {
-  const { contact_number } = req.body;
+  let { contact_number } = req.body;
   if (!contact_number) {
     return res.status(400).json({ error: 'Número de telefone é obrigatório.' });
+  }
+
+  contact_number = contact_number.replace(/\D/g, '');
+  if (!contact_number.startsWith('55')) {
+    contact_number = '55' + contact_number;
   }
 
   try {
