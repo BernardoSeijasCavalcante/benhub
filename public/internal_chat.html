@@ -755,6 +755,25 @@
     </div>
   </div>
 
+  <!-- Modal Preview de Imagem Colada -->
+  <div class="modal-overlay" id="modal-paste-image">
+    <div class="modal-content" style="width: 400px;">
+      <div class="modal-header">
+        <h3>Enviar Imagem</h3>
+        <button class="close-modal" id="close-paste-image">✖</button>
+      </div>
+      <div style="text-align: center; margin-bottom: 15px; background: #000; padding: 10px; border-radius: 8px;">
+        <img id="paste-image-preview" src="" style="max-width: 100%; max-height: 300px; border-radius: 4px; object-fit: contain;">
+      </div>
+      <form id="form-paste-image">
+        <div class="form-group">
+          <input type="text" id="paste-image-caption" placeholder="Adicione uma legenda..." autocomplete="off">
+        </div>
+        <button type="submit" class="btn-primary" id="btn-send-paste-image">Enviar</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Container -->
   <div id="toast-container"></div>
 

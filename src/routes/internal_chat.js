@@ -464,14 +464,17 @@ router.post('/:chatId/upload', upload.single('file'), async (req, res) => {
   const fileUrl = '/uploads/' + req.file.filename;
   
   let contentType = 'file';
+  let contentToSave = req.file.originalname;
+
   if (req.file.mimetype.startsWith('image/')) {
     contentType = 'image';
+    contentToSave = req.body.caption || '';
   }
 
   const [result] = await db.execute(`
     INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url)
     VALUES (?, ?, ?, ?, ?)
-  `, [chatId, userId, contentType, req.file.originalname, fileUrl]);
+  `, [chatId, userId, contentType, contentToSave, fileUrl]);
 
   // Update last_message_at and unread_count
   await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);

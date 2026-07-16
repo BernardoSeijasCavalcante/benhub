@@ -839,10 +839,89 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // CTRL+V Paste Event
+  document.addEventListener('paste', (e) => {
+    if (!activeChatId) return;
+    const items = e.clipboardData.items;
+    let imageFile = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        imageFile = items[i].getAsFile();
+        break;
+      }
+    }
+    if (imageFile) {
+      e.preventDefault();
+      openPasteModal(imageFile);
+    }
+  });
+
+  // Image Paste Modal Logic
+  let fileToUpload = null;
+  const modalPasteImage = document.getElementById('modal-paste-image');
+  const pasteImagePreview = document.getElementById('paste-image-preview');
+  const pasteImageCaption = document.getElementById('paste-image-caption');
+
+  if (document.getElementById('close-paste-image')) {
+    document.getElementById('close-paste-image').addEventListener('click', () => {
+      modalPasteImage.classList.remove('active');
+      fileToUpload = null;
+    });
+  }
+
+  if (document.getElementById('form-paste-image')) {
+    document.getElementById('form-paste-image').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!activeChatId || !fileToUpload) return;
+      
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+      if (pasteImageCaption.value.trim()) {
+        formData.append('caption', pasteImageCaption.value.trim());
+      }
+
+      const btn = document.getElementById('btn-send-paste-image');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        await fetch(`/api/internal-chat/${activeChatId}/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        modalPasteImage.classList.remove('active');
+      } catch (err) {
+        alert('Erro ao enviar imagem.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar';
+        fileToUpload = null;
+      }
+    });
+  }
+
+  function openPasteModal(file) {
+    fileToUpload = file;
+    const url = URL.createObjectURL(file);
+    pasteImagePreview.src = url;
+    pasteImageCaption.value = '';
+    modalPasteImage.classList.add('active');
+    setTimeout(() => pasteImageCaption.focus(), 100);
+  }
+
   async function handleFileUpload(files) {
     if (!files.length || !activeChatId) return;
+    const file = files[0];
+    
+    if (file.type.startsWith('image/')) {
+      openPasteModal(file);
+      fileInput.value = '';
+      return;
+    }
+
     const formData = new FormData();
-    formData.append('file', files[0]);
+    formData.append('file', file);
 
     try {
       await fetch(`/api/internal-chat/${activeChatId}/upload`, {
