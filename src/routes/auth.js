@@ -89,4 +89,18 @@ router.get('/me', authenticateToken, async (req, res) => {
   res.json({ user: req.user });
 });
 
+router.post('/update-phone', authenticateToken, async (req, res) => {
+  const { contact_number } = req.body;
+  if (!contact_number) {
+    return res.status(400).json({ error: 'Número de telefone é obrigatório.' });
+  }
+
+  try {
+    await db.execute('UPDATE users SET contact_number = ? WHERE id = ?', [contact_number, req.user.id]);
+    res.json({ message: 'Telefone atualizado com sucesso' });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao atualizar telefone.' });
+  }
+});
+
 module.exports = router;

@@ -30,17 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const data = await response.json();
 
       if (response.ok) {
-        // Salvar token e redirecionar
+        // Salvar token e usuário no localStorage
         localStorage.setItem('benhub_token', data.token);
         localStorage.setItem('benhub_user', JSON.stringify(data.user));
         
-        // Redirecionamento baseado na role
-        if (data.user.role === 'admin') {
-          // Podemos mandar para o chat ou painel admin. Vamos pro chat por padrão e ele navega pro admin se quiser, ou vai pro admin direto se houver um botão.
-          // Para simplificar: admin tem acesso ao chat também.
-          window.location.href = '/sms_dispatch.html';
+        // Verifica se o usuário não tem telefone
+        if (!data.user.contact_number) {
+          showPhoneModal();
         } else {
-          window.location.href = '/sms_dispatch.html';
+          redirectUser(data.user.role);
         }
       } else {
         showError(data.error || 'Falha ao fazer login');
@@ -75,4 +73,87 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   `;
   document.head.appendChild(style);
+
+  // --- Phone Modal Logic ---
+  const phoneModal = document.getElementById('phone-modal');
+  const phoneForm = document.getElementById('phone-form');
+  const phoneInput = document.getElementById('phone-input');
+  const phoneErrorMsg = document.getElementById('phone-error-message');
+  const phoneBtn = document.getElementById('phone-btn');
+  const phoneBtnText = phoneBtn ? phoneBtn.querySelector('span') : null;
+  const phoneLoader = phoneBtn ? phoneBtn.querySelector('.loader') : null;
+
+  function redirectUser(role) {
+    window.location.href = '/sms_dispatch.html';
+  }
+
+  function showPhoneModal() {
+    phoneModal.style.display = 'flex';
+  }
+
+  if (phoneInput) {
+    phoneInput.addEventListener('input', function (e) {
+      let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+      e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+    });
+  }
+
+  if (phoneForm) {
+    phoneForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const phone = phoneInput.value;
+      if (phone.length < 14) {
+        showPhoneError('Por favor, insira um número válido.');
+        return;
+      }
+
+      phoneErrorMsg.classList.remove('visible');
+      phoneErrorMsg.textContent = '';
+      phoneBtnText.style.display = 'none';
+      phoneLoader.style.display = 'block';
+      phoneBtn.disabled = true;
+
+      try {
+        const token = localStorage.getItem('benhub_token');
+        const res = await fetch('/api/auth/update-phone', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ contact_number: phone })
+        });
+
+        if (res.ok) {
+          const userStr = localStorage.getItem('benhub_user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            user.contact_number = phone;
+            localStorage.setItem('benhub_user', JSON.stringify(user));
+            redirectUser(user.role);
+          } else {
+            redirectUser();
+          }
+        } else {
+          const data = await res.json();
+          showPhoneError(data.error || 'Erro ao salvar telefone.');
+        }
+      } catch (err) {
+        showPhoneError('Erro de conexão com o servidor.');
+      } finally {
+        phoneBtnText.style.display = 'block';
+        phoneLoader.style.display = 'none';
+        phoneBtn.disabled = false;
+      }
+    });
+  }
+
+  function showPhoneError(msg) {
+    phoneErrorMsg.textContent = msg;
+    phoneErrorMsg.classList.add('visible');
+    phoneForm.style.animation = 'shake 0.5s';
+    setTimeout(() => {
+      phoneForm.style.animation = '';
+    }, 500);
+  }
 });

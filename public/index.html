@@ -38,6 +38,28 @@
     </div>
   </div>
 
+  <!-- Modal para captura de telefone -->
+  <div id="phone-modal" class="modal-overlay" style="display: none;">
+    <div class="login-box glass-panel modal-box">
+      <h2>Confirmação de Telefone</h2>
+      <p class="subtitle">Como este é seu primeiro acesso, por favor informe seu número de telefone para continuar.</p>
+      
+      <form id="phone-form">
+        <div class="input-group">
+          <label for="phone-input">Telefone (WhatsApp)</label>
+          <input type="text" id="phone-input" required placeholder="(00) 00000-0000" maxlength="15">
+        </div>
+
+        <div id="phone-error-message" class="error-message"></div>
+        
+        <button type="submit" class="btn-primary" id="phone-btn">
+          <span>Salvar e Continuar</span>
+          <div class="loader" style="display: none;"></div>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script src="js/login.js"></script>
 </body>
 </html>
