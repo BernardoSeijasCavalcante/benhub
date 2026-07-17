@@ -109,7 +109,7 @@ router.get('/chats', async (req, res) => {
       m.role, m.is_pinned, m.unread_count
     FROM internal_chats c
     JOIN internal_chat_members m ON c.id = m.chat_id
-    WHERE m.user_id = ?
+    WHERE m.user_id = ? AND m.is_hidden = 0
     ORDER BY m.is_pinned DESC, c.last_message_at DESC, c.created_at DESC
   `, [userId]);
 
@@ -418,7 +418,8 @@ router.post('/:chatId/messages', async (req, res) => {
 
   // Update last_message_at and unread_count
   await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
-  await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+  await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1, is_hidden = 0 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+  await db.execute('UPDATE internal_chat_members SET is_hidden = 0 WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
 
   const messageId = result.insertId;
   const [newMessage_rows] = await db.execute(`
@@ -478,7 +479,8 @@ router.post('/:chatId/upload', upload.single('file'), async (req, res) => {
 
   // Update last_message_at and unread_count
   await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
-  await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+  await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1, is_hidden = 0 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+  await db.execute('UPDATE internal_chat_members SET is_hidden = 0 WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
 
   const messageId = result.insertId;
   const [newMessage_rows] = await db.execute(`
@@ -551,12 +553,27 @@ router.post('/contacts', async (req, res) => {
   res.json({ success: true });
 });
 
-// Remover contato da lista pessoal
+// Remover contato da lista pessoal e ocultar chat
 router.delete('/contacts/:contactId', async (req, res) => {
   const { contactId } = req.params;
   const userId = req.user.id;
 
   await db.execute('DELETE FROM user_contacts WHERE user_id = ? AND contact_id = ?', [userId, contactId]);
+
+  // Ocultar chat direto
+  const [existingChat_rows] = await db.execute(`
+    SELECT m1.chat_id
+    FROM internal_chat_members m1
+    JOIN internal_chat_members m2 ON m1.chat_id = m2.chat_id
+    JOIN internal_chats c ON c.id = m1.chat_id
+    WHERE c.type = 'direct' AND m1.user_id = ? AND m2.user_id = ?
+  `, [userId, contactId]);
+
+  if (existingChat_rows.length > 0) {
+    const chatId = existingChat_rows[0].chat_id;
+    await db.execute('UPDATE internal_chat_members SET is_hidden = 1 WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
+  }
+
   res.json({ success: true });
 });
 
@@ -691,7 +708,8 @@ router.post('/forward', async (req, res) => {
         
         // Update last_message_at and unread_count
         await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
-        await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+        await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1, is_hidden = 0 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+        await db.execute('UPDATE internal_chat_members SET is_hidden = 0 WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
 
         const [newMessage_rows] = await db.execute(`
           SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
@@ -740,7 +758,8 @@ router.post('/forward', async (req, res) => {
       
       // Update last_message_at and unread_count
       await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
-      await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+      await db.execute('UPDATE internal_chat_members SET unread_count = unread_count + 1, is_hidden = 0 WHERE chat_id = ? AND user_id != ?', [chatId, userId]);
+      await db.execute('UPDATE internal_chat_members SET is_hidden = 0 WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
 
       const [newMessage_rows] = await db.execute(`
         SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url

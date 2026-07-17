@@ -83,6 +83,7 @@ async function initDb(db) {
         user_id INTEGER,
         role VARCHAR(50) DEFAULT 'member',
         is_pinned BOOLEAN DEFAULT 0,
+        is_hidden BOOLEAN DEFAULT 0,
         unread_count INTEGER DEFAULT 0,
         joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (chat_id, user_id),
@@ -161,6 +162,13 @@ async function initDb(db) {
         FOREIGN KEY (granted_by) REFERENCES users (id)
       )
     `);
+
+    // Adicionar is_hidden se não existir
+    try {
+      await db.query('ALTER TABLE internal_chat_members ADD COLUMN is_hidden BOOLEAN DEFAULT 0');
+    } catch (e) {
+      // Ignore se a coluna já existir
+    }
 
     // Inserir hierarquia Admin padrão e usuário Admin se não existirem
     const [hierarchies] = await db.query('SELECT id FROM hierarchies WHERE level = 100');
