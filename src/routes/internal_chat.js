@@ -23,6 +23,12 @@ router.use(authenticateToken);
 async function checkGroupAdmin(req, res, next) {
   const { chatId } = req.params;
   const userId = req.user.id;
+
+  // Administrador do sistema sempre tem permissão
+  if (req.user && req.user.role === 'admin') {
+    return next();
+  }
+
   const [member_rows] = await db.execute('SELECT role FROM internal_chat_members WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
   const member = member_rows[0];
   
@@ -847,4 +853,65 @@ router.post('/requests/:id/reject', async (req, res) => {
   res.json({ success: true });
 });
 
+// Editar mensagem
+router.put('/:chatId/messages/:messageId', async (req, res) => {
+  const { chatId, messageId } = req.params;
+  const { content } = req.body;
+  const userId = req.user.id;
+
+  if (!content) return res.status(400).json({ error: 'Conteúdo obrigatório.' });
+
+  const [msgRows] = await db.execute('SELECT * FROM internal_messages WHERE id = ? AND chat_id = ? AND sender_id = ?', [messageId, chatId, userId]);
+  if (msgRows.length === 0) return res.status(404).json({ error: 'Mensagem não encontrada ou permissão negada.' });
+  const msg = msgRows[0];
+
+  const now = new Date();
+  const createdAt = new Date(msg.created_at);
+  const diffSeconds = (now - createdAt) / 1000;
+
+  if (diffSeconds > 120) return res.status(403).json({ error: 'Tempo limite de 120 segundos excedido.' });
+  if (msg.is_deleted) return res.status(400).json({ error: 'Não é possível editar mensagem apagada.' });
+
+  await db.execute('UPDATE internal_messages SET content = ?, is_edited = 1, updated_at = NOW() WHERE id = ?', [content, messageId]);
+
+  const io = req.app.get('io');
+  if (io) {
+    const [members] = await db.execute('SELECT user_id FROM internal_chat_members WHERE chat_id = ?', [chatId]);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('message_edited', { chatId: Number(chatId), messageId: Number(messageId), content, is_edited: true });
+    });
+  }
+
+  res.json({ success: true });
+});
+
+// Apagar mensagem
+router.delete('/:chatId/messages/:messageId', async (req, res) => {
+  const { chatId, messageId } = req.params;
+  const userId = req.user.id;
+
+  const [msgRows] = await db.execute('SELECT * FROM internal_messages WHERE id = ? AND chat_id = ? AND sender_id = ?', [messageId, chatId, userId]);
+  if (msgRows.length === 0) return res.status(404).json({ error: 'Mensagem não encontrada ou permissão negada.' });
+  const msg = msgRows[0];
+
+  const now = new Date();
+  const createdAt = new Date(msg.created_at);
+  const diffSeconds = (now - createdAt) / 1000;
+
+  if (diffSeconds > 120) return res.status(403).json({ error: 'Tempo limite de 120 segundos excedido.' });
+
+  await db.execute('UPDATE internal_messages SET is_deleted = 1, updated_at = NOW() WHERE id = ?', [messageId]);
+
+  const io = req.app.get('io');
+  if (io) {
+    const [members] = await db.execute('SELECT user_id FROM internal_chat_members WHERE chat_id = ?', [chatId]);
+    members.forEach(m => {
+      io.to('user_' + m.user_id).emit('message_deleted', { chatId: Number(chatId), messageId: Number(messageId), is_deleted: true });
+    });
+  }
+
+  res.json({ success: true });
+});
+
 module.exports = router;
+

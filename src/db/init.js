@@ -116,6 +116,9 @@ async function initDb(db) {
         file_url TEXT,
         is_pinned BOOLEAN DEFAULT 0,
         is_forwarded BOOLEAN DEFAULT 0,
+        is_deleted BOOLEAN DEFAULT 0,
+        is_edited BOOLEAN DEFAULT 0,
+        updated_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (chat_id) REFERENCES internal_chats (id),
         FOREIGN KEY (sender_id) REFERENCES users (id)
@@ -169,6 +172,17 @@ async function initDb(db) {
     } catch (e) {
       // Ignore se a coluna já existir
     }
+
+    // Adicionar colunas de deleção/edição em internal_messages se não existirem
+    try {
+      await db.query('ALTER TABLE internal_messages ADD COLUMN is_deleted BOOLEAN DEFAULT 0');
+    } catch (e) {}
+    try {
+      await db.query('ALTER TABLE internal_messages ADD COLUMN is_edited BOOLEAN DEFAULT 0');
+    } catch (e) {}
+    try {
+      await db.query('ALTER TABLE internal_messages ADD COLUMN updated_at DATETIME');
+    } catch (e) {}
 
     // Inserir hierarquia Admin padrão e usuário Admin se não existirem
     const [hierarchies] = await db.query('SELECT id FROM hierarchies WHERE level = 100');

@@ -479,14 +479,19 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch(`/api/internal-chat/${chatId}/messages`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      
+      // Validação de Race Condition:
+      // Se o usuário clicou em outro chat enquanto aguardávamos a resposta, abortamos o processamento dos dados antigos.
+      if (activeChatId !== chatId) return;
+      
       const data = await res.json();
-      currentChatInfo = data.chatInfo;
-      currentChatMembers = data.members;
       currentMessages = data.messages;
+      currentChatMembers = data.members;
+      currentChatInfo = data.chatInfo;
       window.currentChatExplicitPermission = data.explicitPermission; // guardando globalmente para usar no painel
       
       const myMemberInfo = currentChatMembers.find(m => m.id === currentUser.id);
-      isAdminOfCurrentGroup = myMemberInfo && myMemberInfo.role === 'admin';
+      isAdminOfCurrentGroup = (myMemberInfo && myMemberInfo.role === 'admin') || currentUser.role === 'admin';
 
       renderMessages();
       renderDetailsPanel();
@@ -505,6 +510,57 @@ document.addEventListener('DOMContentLoaded', () => {
     
     container.scrollTop = container.scrollHeight;
     renderPinnedBar();
+  }
+
+  function formatMessageText(text) {
+    if (!text) return '';
+    
+    // 1. Sanitização
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+    let formatted = text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    
+    // 2. Negrito (**texto** ou *texto*)
+    formatted = formatted.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+    formatted = formatted.replace(/\*([^*]+?)\*/g, '<strong>$1</strong>');
+    
+    // 3. Tópicos (Listas)
+    let lines = formatted.split('\n');
+    let outLines = [];
+    let inList = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      if (line.trim().startsWith('- ')) {
+        if (!inList) {
+          outLines.push('<ul style="margin: 0; padding-left: 20px;">');
+          inList = true;
+        }
+        outLines.push('<li>' + line.trim().substring(2) + '</li>');
+      } else {
+        if (inList) {
+          outLines.push('</ul>');
+          inList = false;
+        }
+        outLines.push(line);
+      }
+    }
+    if (inList) {
+      outLines.push('</ul>');
+    }
+    
+    // 4. Quebras de linha (ignorando as tags de lista recém criadas)
+    formatted = outLines.map(line => {
+      if (line.startsWith('<ul') || line.startsWith('</ul') || line.startsWith('<li')) {
+        return line;
+      }
+      return line + '<br>';
+    }).join('');
+    
+    if (formatted.endsWith('<br>')) {
+      formatted = formatted.slice(0, -4);
+    }
+    
+    return formatted;
   }
 
   function createMessageElement(msg) {
@@ -530,20 +586,45 @@ document.addEventListener('DOMContentLoaded', () => {
     el.style.margin = '0';
     
     const timeString = msg.created_at.includes('Z') ? msg.created_at : msg.created_at + 'Z';
-    const time = new Date(timeString).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    let time = new Date(timeString).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    if (msg.is_edited && !msg.is_deleted) time += ' (editado)';
     
     let contentHtml = '';
-    if (msg.is_forwarded) {
-      contentHtml += `<div class="forwarded-label">↪ Encaminhada</div>`;
-    }
-
-    if (msg.content_type === 'text') {
-      contentHtml += `<p class="text">${msg.content}</p>`;
-    } else if (msg.content_type === 'image') {
-      contentHtml += `<img src="${msg.file_url}" class="message-image" alt="Imagem enviada" onclick="window.openFileViewer('${msg.file_url}', 'Imagem')">`;
-      if(msg.content) contentHtml += `<p class="text" style="font-size:12px; margin-top:5px;">${msg.content}</p>`;
-    } else if (msg.content_type === 'file') {
-      contentHtml += `<a class="message-file" onclick="window.openFileViewer('${msg.file_url}', '${msg.content}')">📄 ${msg.content}</a>`;
+    if (msg.is_deleted) {
+      if (currentUser.role === 'admin') {
+        contentHtml += `
+          <div class="deleted-message-admin-container">
+            <p class="text" style="color: var(--text-secondary); font-style: italic; display: flex; align-items: center; gap: 8px;">
+              🚫 Mensagem apagada 
+              <button class="btn-reveal-deleted" style="background: var(--bg-secondary); border: 1px solid var(--accent-gold); color: var(--accent-gold); font-size: 10px; padding: 2px 6px; border-radius: 4px; cursor: pointer;">Ver (Admin)</button>
+            </p>
+            <div class="deleted-content-hidden" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
+        `;
+        if (msg.is_forwarded) contentHtml += `<div class="forwarded-label">↪ Encaminhada</div>`;
+        if (msg.content_type === 'text') {
+          contentHtml += `<p class="text">${formatMessageText(msg.content)}</p>`;
+        } else if (msg.content_type === 'image') {
+          contentHtml += `<img src="${msg.file_url}" class="message-image" alt="Imagem enviada" onclick="window.openFileViewer('${msg.file_url}', 'Imagem')">`;
+          if(msg.content) contentHtml += `<p class="text" style="font-size:12px; margin-top:5px;">${formatMessageText(msg.content)}</p>`;
+        } else if (msg.content_type === 'file') {
+          contentHtml += `<a class="message-file" onclick="window.openFileViewer('${msg.file_url}', '${msg.content}')">📄 ${msg.content}</a>`;
+        }
+        contentHtml += `</div></div>`;
+      } else {
+        contentHtml += `<p class="text" style="color: var(--text-secondary); font-style: italic;">🚫 Mensagem apagada</p>`;
+      }
+    } else {
+      if (msg.is_forwarded) {
+        contentHtml += `<div class="forwarded-label">↪ Encaminhada</div>`;
+      }
+      if (msg.content_type === 'text') {
+        contentHtml += `<p class="text">${formatMessageText(msg.content)}</p>`;
+      } else if (msg.content_type === 'image') {
+        contentHtml += `<img src="${msg.file_url}" class="message-image" alt="Imagem enviada" onclick="window.openFileViewer('${msg.file_url}', 'Imagem')">`;
+        if(msg.content) contentHtml += `<p class="text" style="font-size:12px; margin-top:5px;">${formatMessageText(msg.content)}</p>`;
+      } else if (msg.content_type === 'file') {
+        contentHtml += `<a class="message-file" onclick="window.openFileViewer('${msg.file_url}', '${msg.content}')">📄 ${msg.content}</a>`;
+      }
     }
 
     let senderNameHtml = !isMine && activeChatType === 'group'
@@ -579,14 +660,20 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       
       <!-- Actions Button -->
-      <button class="message-actions-trigger">⚙️</button>
+      ${!msg.is_deleted ? `<button class="message-actions-trigger">⚙️</button>` : ''}
       
       <!-- Actions Menu -->
+      ${!msg.is_deleted ? `
       <div class="message-actions-menu">
         <button class="btn-act-react">Reagir</button>
         <button class="btn-act-forward">Encaminhar</button>
         <button class="btn-act-pin">${msg.is_pinned ? 'Desfixar' : 'Fixar'}</button>
+        ${(isMine && (Date.now() - new Date(timeString)) / 1000 <= 120) ? `
+        <button class="btn-act-edit">Editar</button>
+        <button class="btn-act-delete" style="color: #ff6b6b;">Apagar</button>
+        ` : ''}
       </div>
+      ` : ''}
 
       <!-- Emoji Picker -->
       <div class="reaction-picker">
@@ -603,24 +690,64 @@ document.addEventListener('DOMContentLoaded', () => {
     const menu = el.querySelector('.message-actions-menu');
     const picker = el.querySelector('.reaction-picker');
 
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      // Close all other menus
-      document.querySelectorAll('.message-actions-menu, .reaction-picker').forEach(m => m.style.display = 'none');
-      menu.style.display = 'flex';
-    });
+    if (trigger && menu) {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Close all other menus
+        document.querySelectorAll('.message-actions-menu, .reaction-picker').forEach(m => m.style.display = 'none');
+        menu.style.display = 'flex';
+      });
 
-    document.addEventListener('click', () => {
-      menu.style.display = 'none';
-      picker.style.display = 'none';
-    });
+      document.addEventListener('click', () => {
+        menu.style.display = 'none';
+        picker.style.display = 'none';
+      });
 
-    // Reações
-    el.querySelector('.btn-act-react').addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.style.display = 'none';
-      picker.style.display = 'flex';
-    });
+      // Reações
+      const btnReact = el.querySelector('.btn-act-react');
+      if (btnReact) {
+        btnReact.addEventListener('click', (e) => {
+          e.stopPropagation();
+          menu.style.display = 'none';
+          picker.style.display = 'flex';
+        });
+      }
+
+      // Editar
+      const btnEdit = el.querySelector('.btn-act-edit');
+      if (btnEdit) {
+        btnEdit.addEventListener('click', (e) => {
+          e.stopPropagation();
+          menu.style.display = 'none';
+          window.editingMessageId = msg.id;
+          document.getElementById('edit-message-content').value = msg.content;
+          document.getElementById('modal-edit-message').classList.add('active');
+        });
+      }
+
+      // Apagar
+      const btnDelete = el.querySelector('.btn-act-delete');
+      if (btnDelete) {
+        btnDelete.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          menu.style.display = 'none';
+          if (confirm('Deseja apagar esta mensagem?')) {
+            try {
+              const res = await fetch(`/api/internal-chat/${activeChatId}/messages/${msg.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              if (!res.ok) {
+                const data = await res.json();
+                alert(data.error || 'Erro ao apagar mensagem.');
+              }
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        });
+      }
+    }
 
     picker.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', async (e) => {
@@ -657,23 +784,47 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
+    // Botão de revelar conteúdo para administradores
+    const btnReveal = el.querySelector('.btn-reveal-deleted');
+    if (btnReveal) {
+      btnReveal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const contentDiv = el.querySelector('.deleted-content-hidden');
+        if (contentDiv) {
+          if (contentDiv.style.display === 'none') {
+            contentDiv.style.display = 'block';
+            btnReveal.textContent = 'Ocultar';
+          } else {
+            contentDiv.style.display = 'none';
+            btnReveal.textContent = 'Ver (Admin)';
+          }
+        }
+      });
+    }
+
     // Encaminhar
-    el.querySelector('.btn-act-forward').addEventListener('click', (e) => {
-      e.stopPropagation();
-      menu.style.display = 'none';
-      openForwardModal(msg.id);
-    });
+    const btnForward = el.querySelector('.btn-act-forward');
+    if (btnForward) {
+      btnForward.addEventListener('click', (e) => {
+        e.stopPropagation();
+        menu.style.display = 'none';
+        openForwardModal(msg.id);
+      });
+    }
 
     // Fixar
-    el.querySelector('.btn-act-pin').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      menu.style.display = 'none';
-      const action = msg.is_pinned ? 'unpin' : 'pin';
-      await fetch(`/api/internal-chat/${activeChatId}/messages/${msg.id}/${action}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
+    const btnPin = el.querySelector('.btn-act-pin');
+    if (btnPin) {
+      btnPin.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        menu.style.display = 'none';
+        const action = msg.is_pinned ? 'unpin' : 'pin';
+        await fetch(`/api/internal-chat/${activeChatId}/messages/${msg.id}/${action}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
       });
-    });
+    }
 
     return el;
   }
@@ -792,6 +943,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const msg = currentMessages.find(m => m.id == data.messageId);
       if (msg && msg.reactions) {
         msg.reactions = msg.reactions.filter(r => !(r.user_id == data.userId && r.reaction == data.reaction));
+        renderMessages();
+      }
+    }
+  });
+
+  // Eventos de edição e exclusão de mensagens
+  socket.on('message_edited', (data) => {
+    if (activeChatId == data.chatId) {
+      const msg = currentMessages.find(m => m.id == data.messageId);
+      if (msg) {
+        msg.content = data.content;
+        msg.is_edited = true;
+        renderMessages();
+      }
+    }
+  });
+
+  socket.on('message_deleted', (data) => {
+    if (activeChatId == data.chatId) {
+      const msg = currentMessages.find(m => m.id == data.messageId);
+      if (msg) {
+        msg.is_deleted = true;
         renderMessages();
       }
     }
@@ -1255,6 +1428,40 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
+  
+  // Editar Mensagem Modal
+  document.getElementById('close-edit-message').addEventListener('click', () => {
+    document.getElementById('modal-edit-message').classList.remove('active');
+    window.editingMessageId = null;
+  });
+
+  document.getElementById('form-edit-message').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!window.editingMessageId) return;
+
+    const content = document.getElementById('edit-message-content').value.trim();
+    if (!content) return;
+
+    try {
+      const res = await fetch(`/api/internal-chat/${activeChatId}/messages/${window.editingMessageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ content })
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Erro ao editar mensagem.');
+      } else {
+        document.getElementById('modal-edit-message').classList.remove('active');
+        window.editingMessageId = null;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao editar mensagem.');
+    }
+  });
+
   document.getElementById('close-new-group').addEventListener('click', () => {
     document.getElementById('modal-new-group').classList.remove('active');
   });
