@@ -556,6 +556,50 @@
       text-overflow: ellipsis;
     }
 
+    /* Reply Bubble inside Message */
+    .message-reply-quote {
+      background: rgba(0,0,0,0.2);
+      border-left: 3px solid var(--accent-gold);
+      padding: 6px 10px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .message-reply-quote .reply-name {
+      color: var(--accent-gold);
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    .message-reply-quote .reply-text {
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Mention Highlight */
+    .mention-highlight {
+      color: var(--accent-gold);
+      font-weight: bold;
+      background: rgba(255, 193, 7, 0.1);
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+    
+    /* Mention item in autocomplete */
+    .mention-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .mention-item:hover, .mention-item.active {
+      background: rgba(255, 193, 7, 0.2);
+    }
+
   </style>
 </head>
 
@@ -611,11 +655,11 @@
 
       <!-- Estado Vazio -->
       <div class="empty-state" id="empty-state">
-        <div class="logo">
-          <span class="logo-text">Comunicação Interna</span>
-          <div class="logo-dot"></div>
+        <div class="glass-panel" style="padding: 40px 60px; align-items: center; justify-content: center; margin-bottom: 24px; border-radius: 24px; background: rgba(10, 25, 47, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); box-shadow: 0 15px 35px rgba(0,0,0,0.2);">
+          <img src="logo.png" alt="BenConsig Logo" style="max-width: 160px; height: auto; margin-bottom: 20px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.3));" />
+          <div style="font-size: 1.4rem; font-weight: 600; color: var(--text-primary); letter-spacing: 0.5px;">Comunicação Interna</div>
         </div>
-        <p>Selecione um chat para interagir com a equipe</p>
+        <p style="font-size: 1.05rem; opacity: 0.8;">Selecione um chat para interagir com a equipe</p>
       </div>
 
       <!-- Área de Chat Ativa -->
@@ -644,15 +688,29 @@
           Este grupo foi inativado. O envio de mensagens está desabilitado.
         </div>
 
-        <footer class="chat-footer" id="chat-footer">
-          <form id="send-message-form" style="display: flex; width: 100%;">
-            <div class="actions">
+        <footer class="chat-footer" id="chat-footer" style="position: relative; flex-direction: column;">
+          <!-- Reply Preview -->
+          <div id="reply-preview-bar" style="display: none; width: 100%; background: rgba(0,0,0,0.4); border-left: 4px solid var(--accent-gold); padding: 8px 12px; margin-bottom: 5px; border-radius: 4px; font-size: 13px; align-items: center; justify-content: space-between; box-sizing: border-box;">
+            <div style="flex:1; overflow:hidden;">
+              <div id="reply-preview-name" style="color: var(--accent-gold); font-weight: bold; margin-bottom: 3px;">Nome</div>
+              <div id="reply-preview-content" style="color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Mensagem...</div>
+            </div>
+            <button id="cancel-reply-btn" style="background: none; border: none; color: white; cursor: pointer; font-size: 16px; margin-left: 10px;">✖</button>
+          </div>
+          
+          <!-- Mention Autocomplete -->
+          <div id="mention-autocomplete-list" style="display: none; position: absolute; bottom: 100%; left: 10px; width: 250px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; max-height: 150px; overflow-y: auto; box-shadow: 0 -4px 10px rgba(0,0,0,0.3); z-index: 20;">
+            <!-- Itens serão injetados aqui -->
+          </div>
+
+          <form id="send-message-form" style="display: flex; width: 100%; align-items: flex-end;">
+            <div class="actions" style="padding-bottom: 8px;">
               <input type="file" id="file-input" style="display: none;"
                 accept="image/*, .pdf, .doc, .docx, .xls, .xlsx, .zip">
               <button type="button" id="btn-attach-file" class="btn-attach" title="Anexar Arquivo">📎</button>
             </div>
-            <input type="text" id="message-input" placeholder="Digite uma mensagem..." autocomplete="off">
-            <button type="submit" class="btn-send">
+            <textarea id="message-input" placeholder="Digite uma mensagem..." rows="1" style="flex: 1; resize: none; overflow-y: auto; padding: 12px; background: rgba(0, 0, 0, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; color: white; margin-right: 10px; max-height: 120px; font-family: inherit; font-size: 14px; line-height: 1.4; outline: none;"></textarea>
+            <button type="submit" class="btn-send" style="padding-bottom: 8px;">
               <svg viewBox="0 0 24 24" width="24" height="24">
                 <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
               </svg>

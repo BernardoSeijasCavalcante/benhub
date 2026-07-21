@@ -120,8 +120,10 @@ async function initDb(db) {
         is_edited BOOLEAN DEFAULT 0,
         updated_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        reply_to_id INTEGER,
         FOREIGN KEY (chat_id) REFERENCES internal_chats (id),
-        FOREIGN KEY (sender_id) REFERENCES users (id)
+        FOREIGN KEY (sender_id) REFERENCES users (id),
+        FOREIGN KEY (reply_to_id) REFERENCES internal_messages (id)
       )
     `);
 
@@ -182,6 +184,10 @@ async function initDb(db) {
     } catch (e) {}
     try {
       await db.query('ALTER TABLE internal_messages ADD COLUMN updated_at DATETIME');
+    } catch (e) {}
+    try {
+      await db.query('ALTER TABLE internal_messages ADD COLUMN reply_to_id INTEGER');
+      await db.query('ALTER TABLE internal_messages ADD CONSTRAINT fk_reply_to FOREIGN KEY (reply_to_id) REFERENCES internal_messages(id)');
     } catch (e) {}
 
     // Inserir hierarquia Admin padrão e usuário Admin se não existirem

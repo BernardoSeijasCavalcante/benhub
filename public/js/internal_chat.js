@@ -5,6 +5,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  // Permissão para Web Notifications (navegadores modernos exigem interação do usuário)
+  if ('Notification' in window && Notification.permission === 'default') {
+    const requestNotifPerm = () => {
+      Notification.requestPermission();
+      document.removeEventListener('click', requestNotifPerm);
+    };
+    document.addEventListener('click', requestNotifPerm);
+  }
+
+  // Variáveis para indicador no título
+  const originalTitle = document.title || 'BenHub';
+  let titleFlashInterval = null;
+  let isTitleFlashed = false;
+
   // Elementos UI Globais
   const currentUser = JSON.parse(localStorage.getItem('benhub_user'));
   document.getElementById('operator-name').textContent = currentUser.name;
@@ -113,8 +127,57 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentChatMembers = [];
   let currentMessages = [];
   let isAdminOfCurrentGroup = false;
+  let replyingToId = null;
 
   // --- FUNÇÕES UTILITÁRIAS ---
+  function updateBrowserTabIndicator() {
+    const totalUnread = allMyChats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+    
+    if (navigator.setAppBadge) {
+      if (totalUnread > 0) {
+        navigator.setAppBadge(totalUnread).catch(e => console.error(e));
+      } else {
+        navigator.clearAppBadge().catch(e => console.error(e));
+      }
+    }
+
+    if (totalUnread > 0) {
+      startTitleFlashing(`(${totalUnread}) Nova mensagem!`);
+    } else {
+      stopTitleFlashing();
+      document.title = originalTitle;
+    }
+  }
+
+  function startTitleFlashing(flashText) {
+    if (titleFlashInterval) clearInterval(titleFlashInterval);
+    isTitleFlashed = false;
+    titleFlashInterval = setInterval(() => {
+      isTitleFlashed = !isTitleFlashed;
+      const totalUnread = allMyChats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+      document.title = isTitleFlashed ? flashText : `(${totalUnread}) ${originalTitle}`;
+    }, 1000);
+    const totalUnread = allMyChats.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+    document.title = `(${totalUnread}) ${originalTitle}`;
+  }
+
+  function stopTitleFlashing() {
+    if (titleFlashInterval) {
+      clearInterval(titleFlashInterval);
+      titleFlashInterval = null;
+    }
+  }
+
+  function triggerWindowsNotification(title, message, iconUrl) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: iconUrl || '/assets/logo.png',
+        silent: true
+      });
+    }
+  }
+
   function playNotificationSound() {
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -189,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderContactsList() {
+    updateBrowserTabIndicator();
     const listEl = document.getElementById('contacts-list');
     listEl.innerHTML = '';
 
@@ -560,6 +624,17 @@ document.addEventListener('DOMContentLoaded', () => {
       formatted = formatted.slice(0, -4);
     }
     
+    // Highlight Mentions
+    if (currentChatMembers && currentChatMembers.length > 0) {
+      currentChatMembers.forEach(m => {
+        if (m.name) {
+          const mentionStr = '@' + m.name;
+          const regex = new RegExp(mentionStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+          formatted = formatted.replace(regex, `<span class="mention-highlight">${mentionStr}</span>`);
+        }
+      });
+    }
+
     return formatted;
   }
 
@@ -590,6 +665,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (msg.is_edited && !msg.is_deleted) time += ' (editado)';
     
     let contentHtml = '';
+
+    // Quote Bubble
+    if (msg.reply_to_id) {
+      let replyName = msg.reply_sender_name || 'Desconhecido';
+      let replyText = msg.reply_content_type === 'text' ? msg.reply_content : (msg.reply_content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+      contentHtml += `
+        <div class="message-reply-quote" onclick="const e = document.querySelector('.message[data-msg-id=\\'${msg.reply_to_id}\\']'); if(e) e.scrollIntoView({behavior: 'smooth', block: 'center'});">
+          <div class="reply-name">${replyName}</div>
+          <div class="reply-text">${formatMessageText(replyText || '')}</div>
+        </div>
+      `;
+    }
+
     if (msg.is_deleted) {
       if (currentUser.role === 'admin') {
         contentHtml += `
@@ -665,6 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- Actions Menu -->
       ${!msg.is_deleted ? `
       <div class="message-actions-menu">
+        <button class="btn-act-reply">Responder</button>
         <button class="btn-act-react">Reagir</button>
         <button class="btn-act-forward">Encaminhar</button>
         <button class="btn-act-pin">${msg.is_pinned ? 'Desfixar' : 'Fixar'}</button>
@@ -702,6 +791,22 @@ document.addEventListener('DOMContentLoaded', () => {
         menu.style.display = 'none';
         picker.style.display = 'none';
       });
+
+      // Responder
+      const btnReply = el.querySelector('.btn-act-reply');
+      if (btnReply) {
+        btnReply.addEventListener('click', (e) => {
+          e.stopPropagation();
+          menu.style.display = 'none';
+          replyingToId = msg.id;
+          document.getElementById('reply-preview-name').textContent = msg.sender_name || 'Usuário';
+          let previewText = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+          document.getElementById('reply-preview-content').textContent = previewText;
+          document.getElementById('reply-preview-bar').style.display = 'flex';
+          const input = document.getElementById('message-input');
+          if(input) input.focus();
+        });
+      }
 
       // Reações
       const btnReact = el.querySelector('.btn-act-react');
@@ -873,6 +978,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- SOCKET EVENTS ---
   socket.on('receive_internal_message', (msg) => {
+    // 1. Processar a notificação independente de ser o chat ativo ou não
+    if (msg.sender_id !== currentUser.id) {
+      const isMentioned = msg.content && msg.content.includes('@' + currentUser.name);
+
+      const handleNotificationForChat = (chat) => {
+        let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+        let notifTitle = isMentioned ? `🔔 Mencionado em ${chat.name}` : chat.name;
+        
+        // Mostrar o toast HTML sempre, a menos que seja o chat ativo e a janela esteja focada
+        if (activeChatId != msg.chat_id || !document.hasFocus()) {
+          showNotification(notifTitle, preview, chat.id, chat.type, chat.color, chat.photo_url);
+        }
+        
+        // Som e Notificação do Windows (Apenas privados ou menções)
+        if (chat.type === 'direct' || isMentioned) {
+          playNotificationSound();
+          triggerWindowsNotification(notifTitle, preview, chat.photo_url);
+        }
+      };
+
+      // Atualizar lista local
+      let chat = allMyChats.find(c => c.id === msg.chat_id);
+      if (chat) {
+        if (activeChatId != msg.chat_id) {
+          chat.unread_count = (chat.unread_count || 0) + 1;
+        }
+        chat.last_message_at = msg.created_at;
+        renderContactsList();
+        handleNotificationForChat(chat);
+      } else {
+        // Chat não carregado, recarregar a lista toda
+        loadChats().then(() => {
+          chat = allMyChats.find(c => c.id === msg.chat_id);
+          if (chat) {
+            handleNotificationForChat(chat);
+          }
+        });
+      }
+    }
+
+    // 2. Adicionar na interface se for o chat atualmente aberto
     if (activeChatId == msg.chat_id) {
       if (!currentMessages.find(m => m.id === msg.id)) {
         currentMessages.push(msg);
@@ -883,30 +1029,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Mantém como lido
         fetch(`/api/internal-chat/${activeChatId}/read`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } }).catch(e => console.error(e));
-      }
-    } else {
-      if (msg.sender_id !== currentUser.id) {
-        playNotificationSound();
-        
-        // Atualizar lista local
-        let chat = allMyChats.find(c => c.id === msg.chat_id);
-        if (chat) {
-          chat.unread_count = (chat.unread_count || 0) + 1;
-          chat.last_message_at = msg.created_at;
-          renderContactsList();
-          
-          let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
-          showNotification(chat.name, preview, chat.id, chat.type, chat.color, chat.photo_url);
-        } else {
-          // Chat não carregado, recarregar a lista toda
-          loadChats().then(() => {
-            chat = allMyChats.find(c => c.id === msg.chat_id);
-            if (chat) {
-              let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
-              showNotification(chat.name, preview, chat.id, chat.type, chat.color, chat.photo_url);
-            }
-          });
-        }
       }
     }
   });
@@ -970,6 +1092,79 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Funcionalidade do Reply Bar
+  const cancelReplyBtn = document.getElementById('cancel-reply-btn');
+  if (cancelReplyBtn) {
+    cancelReplyBtn.addEventListener('click', () => {
+      replyingToId = null;
+      document.getElementById('reply-preview-bar').style.display = 'none';
+    });
+  }
+
+  // Textarea Shift+Enter, Auto-resize e Mentions
+  const messageInput = document.getElementById('message-input');
+  if (messageInput) {
+    messageInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('send-message-form').dispatchEvent(new Event('submit'));
+      }
+    });
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = (this.scrollHeight) + 'px';
+      
+      // Mentions Autocomplete
+      handleMentionAutocomplete(this);
+    });
+  }
+
+  function handleMentionAutocomplete(textarea) {
+    const text = textarea.value;
+    const cursorPos = textarea.selectionStart;
+    const textBeforeCursor = text.substring(0, cursorPos);
+    const lastAtPos = textBeforeCursor.lastIndexOf('@');
+    
+    const autocompleteList = document.getElementById('mention-autocomplete-list');
+    
+    if (lastAtPos !== -1) {
+      const searchStr = textBeforeCursor.substring(lastAtPos + 1).toLowerCase();
+      if (searchStr.indexOf(' ') !== -1 && searchStr.length > 15) {
+        autocompleteList.style.display = 'none';
+        return;
+      }
+      
+      const matchedMembers = currentChatMembers.filter(m => m.id !== currentUser.id && m.name.toLowerCase().includes(searchStr));
+      
+      if (matchedMembers.length > 0) {
+        autocompleteList.innerHTML = '';
+        matchedMembers.forEach(m => {
+          const item = document.createElement('div');
+          item.className = 'mention-item';
+          const avatarUrl = m.photo_url ? `url(${m.photo_url})` : 'none';
+          const avatarLetter = m.photo_url ? '' : m.name.charAt(0).toUpperCase();
+          item.innerHTML = `
+            <div class="avatar" style="width:24px; height:24px; font-size:10px; background-image:${avatarUrl}; background-size:cover; background-position:center;">${avatarLetter}</div>
+            <span style="color:white; font-size:13px;">${m.name}</span>
+          `;
+          item.addEventListener('click', () => {
+            const beforeMention = text.substring(0, lastAtPos);
+            const afterMention = text.substring(cursorPos);
+            textarea.value = beforeMention + '@' + m.name + ' ' + afterMention;
+            textarea.focus();
+            autocompleteList.style.display = 'none';
+          });
+          autocompleteList.appendChild(item);
+        });
+        autocompleteList.style.display = 'block';
+      } else {
+        autocompleteList.style.display = 'none';
+      }
+    } else {
+      autocompleteList.style.display = 'none';
+    }
+  }
+
   // --- ENVIAR MENSAGEM / DRAG & DROP ---
   document.getElementById('send-message-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -983,8 +1178,13 @@ document.addEventListener('DOMContentLoaded', () => {
     await fetch(`/api/internal-chat/${activeChatId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ content: text, content_type: 'text' })
+      body: JSON.stringify({ content: text, content_type: 'text', reply_to_id: replyingToId })
     });
+    
+    replyingToId = null;
+    const replyBar = document.getElementById('reply-preview-bar');
+    if (replyBar) replyBar.style.display = 'none';
+    if (input.style) input.style.height = 'auto';
   });
 
   // File Upload via botão
@@ -1208,13 +1408,44 @@ document.addEventListener('DOMContentLoaded', () => {
         <input type="file" id="group-photo-input" accept="image/*" style="display: none;">
       ` : '';
 
+      let nameDisplayHtml = `
+        <div id="group-name-display-container" style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+          <h2 id="group-name-text" style="margin: 0; word-break: break-word; flex: 1;">${currentChatInfo.name}</h2>
+          ${isAdminOfCurrentGroup ? `<button id="btn-edit-group-name" class="btn-icon" style="font-size: 14px;" title="Editar Nome">✏️</button>` : ''}
+        </div>
+        <div id="group-name-edit-container" style="display: none; align-items: center; gap: 5px; margin-bottom: 10px;">
+          <input type="text" id="input-edit-group-name" value="${currentChatInfo.name}" style="flex: 1; padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white;">
+          <button id="btn-save-group-name" class="btn-icon" style="color: var(--success);" title="Salvar">✔️</button>
+          <button id="btn-cancel-group-name" class="btn-icon" style="color: var(--danger);" title="Cancelar">✖</button>
+        </div>
+      `;
+
+      let descDisplayHtml = `
+        <div id="group-desc-display-container" style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; width: 100%; text-align: left;">
+          <div style="display: flex; align-items: flex-start; gap: 10px; width: 100%;">
+            <div id="group-desc-text-wrapper" style="flex: 1; overflow: hidden; max-height: 80px; position: relative;">
+              <p id="group-desc-text" class="text-secondary" style="margin: 0; white-space: pre-wrap; word-break: break-word;">${currentChatInfo.description || 'Sem descrição'}</p>
+            </div>
+            ${isAdminOfCurrentGroup ? `<button id="btn-edit-group-desc" class="btn-icon" style="font-size: 14px; margin-top: -2px; flex-shrink: 0;" title="Editar Descrição">✏️</button>` : ''}
+          </div>
+          <button id="btn-read-more-desc" style="background: none; border: none; color: var(--accent-gold); cursor: pointer; font-size: 12px; text-align: left; padding: 0; display: none; width: max-content;">Ler mais</button>
+        </div>
+        <div id="group-desc-edit-container" style="display: none; flex-direction: column; gap: 5px; margin-bottom: 10px;">
+          <textarea id="input-edit-group-desc" rows="3" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.3); color: white; resize: vertical;">${currentChatInfo.description || ''}</textarea>
+          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="btn-cancel-group-desc" class="btn-primary" style="background: var(--danger); padding: 5px 10px; width: auto;">Cancelar</button>
+            <button id="btn-save-group-desc" class="btn-primary" style="background: var(--success); padding: 5px 10px; width: auto;">Salvar</button>
+          </div>
+        </div>
+      `;
+
       let html = `
         <div style="position: relative; display: inline-block; margin-bottom: 10px;">
           <div class="detail-avatar group-avatar" id="detail-group-avatar" style="${avatarStyle}">${(currentChatInfo.name || '?').charAt(0).toUpperCase()}</div>
           ${adminEditHtml}
         </div>
-        <h2>${currentChatInfo.name}</h2>
-        <p class="text-secondary">${currentChatInfo.description || 'Sem descrição'}</p>
+        ${nameDisplayHtml}
+        ${descDisplayHtml}
         <h4 style="margin-top:20px;">Membros (${currentChatMembers.length})</h4>
         <div class="members-list">
       `;
@@ -1246,6 +1477,123 @@ document.addEventListener('DOMContentLoaded', () => {
         html += `<button id="btn-open-add-member" class="btn-primary" style="margin-top: 15px;">➕ Adicionar Membro</button>`;
       }
       body.innerHTML = html;
+
+      // Lógica do "Ler mais"
+      const descWrapper = document.getElementById('group-desc-text-wrapper');
+      const btnReadMore = document.getElementById('btn-read-more-desc');
+      if (descWrapper && btnReadMore) {
+        if (descWrapper.scrollHeight > 80) {
+          btnReadMore.style.display = 'block';
+          btnReadMore.addEventListener('click', () => {
+            if (descWrapper.style.maxHeight === '80px') {
+              descWrapper.style.maxHeight = 'none';
+              btnReadMore.textContent = 'Ler menos';
+            } else {
+              descWrapper.style.maxHeight = '80px';
+              btnReadMore.textContent = 'Ler mais';
+            }
+          });
+        }
+      }
+
+      // Eventos de edição de nome e descrição
+      if (isAdminOfCurrentGroup) {
+        // Nome
+        const btnEditName = document.getElementById('btn-edit-group-name');
+        const displayContainerName = document.getElementById('group-name-display-container');
+        const editContainerName = document.getElementById('group-name-edit-container');
+        const inputName = document.getElementById('input-edit-group-name');
+        const btnSaveName = document.getElementById('btn-save-group-name');
+        const btnCancelName = document.getElementById('btn-cancel-group-name');
+
+        if (btnEditName) {
+          btnEditName.addEventListener('click', () => {
+            displayContainerName.style.display = 'none';
+            editContainerName.style.display = 'flex';
+            inputName.focus();
+          });
+          btnCancelName.addEventListener('click', () => {
+            inputName.value = currentChatInfo.name;
+            editContainerName.style.display = 'none';
+            displayContainerName.style.display = 'flex';
+          });
+          btnSaveName.addEventListener('click', async () => {
+            const newName = inputName.value.trim();
+            if (!newName) {
+              alert('O nome do grupo não pode estar vazio.');
+              return;
+            }
+            try {
+              const res = await fetch(`/api/internal-chat/${activeChatId}/group`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  name: newName,
+                  description: currentChatInfo.description,
+                  color: currentChatInfo.color,
+                  photo_url: currentChatInfo.photo_url
+                })
+              });
+              if (res.ok) {
+                currentChatInfo.name = newName;
+                document.getElementById('group-name-text').textContent = newName;
+                editContainerName.style.display = 'none';
+                displayContainerName.style.display = 'flex';
+                showNotification('Sucesso', 'Nome do grupo atualizado.', activeChatId, 'group', null, null);
+                openChat(activeChatId, newName, currentChatInfo.type, currentChatInfo.color, currentChatInfo.photo_url);
+                loadChats();
+              }
+            } catch (err) {
+              console.error('Erro ao salvar nome', err);
+            }
+          });
+        }
+
+        // Descrição
+        const btnEditDesc = document.getElementById('btn-edit-group-desc');
+        const displayContainerDesc = document.getElementById('group-desc-display-container');
+        const editContainerDesc = document.getElementById('group-desc-edit-container');
+        const inputDesc = document.getElementById('input-edit-group-desc');
+        const btnSaveDesc = document.getElementById('btn-save-group-desc');
+        const btnCancelDesc = document.getElementById('btn-cancel-group-desc');
+
+        if (btnEditDesc) {
+          btnEditDesc.addEventListener('click', () => {
+            displayContainerDesc.style.display = 'none';
+            editContainerDesc.style.display = 'flex';
+            inputDesc.focus();
+          });
+          btnCancelDesc.addEventListener('click', () => {
+            inputDesc.value = currentChatInfo.description || '';
+            editContainerDesc.style.display = 'none';
+            displayContainerDesc.style.display = 'flex';
+          });
+          btnSaveDesc.addEventListener('click', async () => {
+            const newDesc = inputDesc.value.trim();
+            try {
+              const res = await fetch(`/api/internal-chat/${activeChatId}/group`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                  name: currentChatInfo.name,
+                  description: newDesc,
+                  color: currentChatInfo.color,
+                  photo_url: currentChatInfo.photo_url
+                })
+              });
+              if (res.ok) {
+                currentChatInfo.description = newDesc;
+                document.getElementById('group-desc-text').textContent = newDesc || 'Sem descrição';
+                editContainerDesc.style.display = 'none';
+                displayContainerDesc.style.display = 'flex';
+                showNotification('Sucesso', 'Descrição atualizada.', activeChatId, 'group', null, null);
+              }
+            } catch (err) {
+              console.error('Erro ao salvar descrição', err);
+            }
+          });
+        }
+      }
 
       const groupAvatar = document.getElementById('detail-group-avatar');
       if (groupAvatar && currentChatInfo.photo_url) {

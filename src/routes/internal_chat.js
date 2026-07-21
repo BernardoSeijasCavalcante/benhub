@@ -65,9 +65,9 @@ async function checkHighestHierarchy(req, res, next) {
 async function checkCommunicationPermission(userId, targetUserId) {
   if (userId === targetUserId) return true; // Pode falar consigo mesmo
   
-  const [currentUser_rows] = await db.execute('SELECT u.*, h.level as h_level, h.allow_same_level_chat FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?', [userId]);
+  const [currentUser_rows] = await db.execute('SELECT u.*, h.level as h_level, h.allow_same_level_chat, h.can_manage_system FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?', [userId]);
   const currentUser = currentUser_rows[0];
-  const [targetUser_rows] = await db.execute('SELECT u.*, h.level as h_level FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?', [targetUserId]);
+  const [targetUser_rows] = await db.execute('SELECT u.*, h.level as h_level, h.can_manage_system FROM users u LEFT JOIN hierarchies h ON u.hierarchy_id = h.id WHERE u.id = ?', [targetUserId]);
   const targetUser = targetUser_rows[0];
 
   if (!currentUser || !targetUser) return false;
@@ -81,8 +81,12 @@ async function checkCommunicationPermission(userId, targetUserId) {
   // Regra 2: Mesmo nível
   else if (currentUser.h_level === targetUser.h_level) {
     if (currentUser.allow_same_level_chat) allowed = true;
-  } 
-  // Regra 3: Nível imediatamente superior
+  }
+  // Regra 3: Comunicação direta com o Admin é sempre permitida (novo requisito)
+  else if (targetUser.can_manage_system === 1) {
+    allowed = true;
+  }
+  // Regra 4: Nível imediatamente superior
   else {
     const [nextLevelRow_rows] = await db.execute('SELECT MIN(level) as nextLevel FROM hierarchies WHERE level > ?', [currentUser.h_level]);
     const nextLevelRow = nextLevelRow_rows[0];
@@ -354,9 +358,12 @@ router.get('/:chatId/messages', async (req, res) => {
   if (!isMember) return res.status(403).json({ error: 'Acesso negado ao chat.' });
 
   const [messages] = await db.execute(`
-    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
+    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url,
+           rm.content as reply_content, rm.content_type as reply_content_type, ru.name as reply_sender_name
     FROM internal_messages m
     JOIN users u ON m.sender_id = u.id
+    LEFT JOIN internal_messages rm ON m.reply_to_id = rm.id
+    LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.chat_id = ? 
     ORDER BY m.created_at ASC
   `, [chatId]);
@@ -401,7 +408,7 @@ router.get('/:chatId/messages', async (req, res) => {
 // 7. Enviar nova mensagem
 router.post('/:chatId/messages', async (req, res) => {
   const { chatId } = req.params;
-  const { content_type, content, file_url, is_forwarded } = req.body;
+  const { content_type, content, file_url, is_forwarded, reply_to_id } = req.body;
   const userId = req.user.id;
 
   const [isMember_rows] = await db.execute('SELECT 1 FROM internal_chat_members WHERE chat_id = ? AND user_id = ?', [chatId, userId]);
@@ -418,9 +425,9 @@ router.post('/:chatId/messages', async (req, res) => {
   const forwarded = is_forwarded ? 1 : 0;
   
   const [result] = await db.execute(`
-    INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url, is_forwarded)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `, [chatId, userId, content_type || 'text', content || '', file_url || null, forwarded]);
+    INSERT INTO internal_messages (chat_id, sender_id, content_type, content, file_url, is_forwarded, reply_to_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [chatId, userId, content_type || 'text', content || '', file_url || null, forwarded, reply_to_id || null]);
 
   // Update last_message_at and unread_count
   await db.execute('UPDATE internal_chats SET last_message_at = CURRENT_TIMESTAMP WHERE id = ?', [chatId]);
@@ -429,9 +436,12 @@ router.post('/:chatId/messages', async (req, res) => {
 
   const messageId = result.insertId;
   const [newMessage_rows] = await db.execute(`
-    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url
+    SELECT m.*, u.name as sender_name, u.photo_url as sender_photo_url,
+           rm.content as reply_content, rm.content_type as reply_content_type, ru.name as reply_sender_name
     FROM internal_messages m
     JOIN users u ON m.sender_id = u.id
+    LEFT JOIN internal_messages rm ON m.reply_to_id = rm.id
+    LEFT JOIN users ru ON rm.sender_id = ru.id
     WHERE m.id = ?
   `, [messageId]);
   const newMessage = newMessage_rows[0];
@@ -913,5 +923,7 @@ router.delete('/:chatId/messages/:messageId', async (req, res) => {
   res.json({ success: true });
 });
 
+// Exporta função para testes unitários
+router.checkCommunicationPermission = checkCommunicationPermission;
 module.exports = router;
 

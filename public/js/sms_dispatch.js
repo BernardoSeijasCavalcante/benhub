@@ -31,6 +31,67 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/';
   });
 
+  // Funções utilitárias para notificações de chat
+  function playNotificationSound() {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime);
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.start();
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.3);
+      oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch(e) {}
+  }
+
+  function showNotification(title, message, chatId) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'chat-toast';
+    toast.innerHTML = `
+      <div class="chat-toast-header">
+        <span>${title}</span>
+        <button style="background:none;border:none;color:white;cursor:pointer;">✖</button>
+      </div>
+      <div class="chat-toast-body">${message}</div>
+    `;
+
+    toast.querySelector('button').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toast.remove();
+    });
+
+    toast.addEventListener('click', () => {
+      toast.remove();
+      window.location.href = '/internal_chat.html'; // Vai para o chat
+    });
+
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 5000);
+  }
+
+  socket.on('receive_internal_message', (msg) => {
+    if (msg.sender_id !== user.id) {
+      playNotificationSound();
+      
+      const isMentioned = msg.content && msg.content.includes('@' + user.name);
+      const notifTitle = isMentioned ? `🔔 Mencionado por ${msg.sender_name}` : `Nova mensagem de ${msg.sender_name}`;
+      
+      let preview = msg.content_type === 'text' ? msg.content : (msg.content_type === 'image' ? '📷 Imagem' : '📄 Arquivo');
+      showNotification(notifTitle, preview, msg.chat_id);
+    }
+  });
+
   // UI Setup
   document.getElementById('operator-name').textContent = user.name;
   const operatorAvatar = document.getElementById('operator-avatar');

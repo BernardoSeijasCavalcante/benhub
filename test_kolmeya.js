@@ -1,0 +1,1 @@
+require('dotenv').config(); const kolmeya = require('./src/services/kolmeyaService'); kolmeya.sendSMS('11999999999', 'Teste', 1).then(console.log).catch(e => console.log(e.response?.data || e.message));
